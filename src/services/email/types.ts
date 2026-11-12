@@ -21,6 +21,10 @@ export interface SyncResult {
     modseq?: number;
   };
   latestSyncToken?: string;
+  /** Number of folders checked during delta sync (IMAP only). */
+  foldersChecked?: number;
+  /** Number of folders that had new UIDs during delta sync (IMAP only). */
+  foldersWithNewUids?: number;
 }
 
 export interface EmailProvider {

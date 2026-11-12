@@ -85,7 +85,7 @@ export async function getThreadsForCategory(
   );
 }
 
-export async function upsertThread(thread: {
+export interface UpsertThreadInput {
   id: string;
   accountId: string;
   subject: string | null;
@@ -96,26 +96,43 @@ export async function upsertThread(thread: {
   isStarred: boolean;
   isImportant: boolean;
   hasAttachments: boolean;
-}): Promise<void> {
+}
+
+export async function upsertThread(thread: UpsertThreadInput): Promise<void> {
+  await batchUpsertThreads([thread]);
+}
+
+/**
+ * Batch upsert multiple threads in a single SQL statement.
+ */
+export async function batchUpsertThreads(threads: UpsertThreadInput[]): Promise<void> {
+  if (threads.length === 0) return;
   const db = await getDb();
+  const cols = "id, account_id, subject, snippet, last_message_at, message_count, is_read, is_starred, is_important, has_attachments";
+  const perRow = 10;
+  const placeholders = threads.map((_, ri) => {
+    const params: string[] = [];
+    for (let ci = 0; ci < perRow; ci++) {
+      params.push(`$${ri * perRow + ci + 1}`);
+    }
+    return `(${params.join(", ")})`;
+  }).join(", ");
+  const allParams: unknown[] = [];
+  for (const t of threads) {
+    allParams.push(
+      t.id, t.accountId, t.subject, t.snippet, t.lastMessageAt,
+      t.messageCount, t.isRead ? 1 : 0, t.isStarred ? 1 : 0,
+      t.isImportant ? 1 : 0, t.hasAttachments ? 1 : 0,
+    );
+  }
   await db.execute(
-    `INSERT INTO threads (id, account_id, subject, snippet, last_message_at, message_count, is_read, is_starred, is_important, has_attachments)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    `INSERT INTO threads (${cols}) VALUES ${placeholders}
      ON CONFLICT(account_id, id) DO UPDATE SET
-       subject = $3, snippet = $4, last_message_at = $5, message_count = $6,
-       is_read = $7, is_starred = $8, is_important = $9, has_attachments = $10`,
-    [
-      thread.id,
-      thread.accountId,
-      thread.subject,
-      thread.snippet,
-      thread.lastMessageAt,
-      thread.messageCount,
-      thread.isRead ? 1 : 0,
-      thread.isStarred ? 1 : 0,
-      thread.isImportant ? 1 : 0,
-      thread.hasAttachments ? 1 : 0,
-    ],
+       subject = excluded.subject, snippet = excluded.snippet,
+       last_message_at = excluded.last_message_at, message_count = excluded.message_count,
+       is_read = excluded.is_read, is_starred = excluded.is_starred,
+       is_important = excluded.is_important, has_attachments = excluded.has_attachments`,
+    allParams,
   );
 }
 

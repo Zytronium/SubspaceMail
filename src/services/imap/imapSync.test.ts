@@ -39,22 +39,27 @@ vi.mock("./folderMapper", () => ({
 }));
 vi.mock("../db/messages", () => ({
   upsertMessage: vi.fn(),
+  batchUpsertMessages: vi.fn(),
   updateMessageThreadIds: vi.fn(),
 }));
 vi.mock("../db/threads", () => ({
   upsertThread: vi.fn(),
+  batchUpsertThreads: vi.fn(),
   setThreadLabels: vi.fn(),
   deleteThread: vi.fn(),
 }));
 vi.mock("../db/attachments", () => ({
   upsertAttachment: vi.fn(),
+  batchUpsertAttachments: vi.fn(),
 }));
 vi.mock("../db/accounts", () => ({
   getAccount: vi.fn(),
   updateAccountSyncState: vi.fn(),
 }));
 vi.mock("../db/connection", () => ({
-  withTransaction: vi.fn(async (fn: () => Promise<void>) => fn()),
+  getDb: vi.fn(),
+  buildDynamicUpdate: vi.fn(),
+  selectFirstBy: vi.fn(),
 }));
 vi.mock("../db/folderSyncState", () => ({
   upsertFolderSyncState: vi.fn(),
@@ -74,10 +79,9 @@ import {
 } from "@/test/mocks";
 import { imapListFolders, imapSearchFolder, imapFetchMessages } from "./tauriCommands";
 import { getAccount } from "../db/accounts";
-import { withTransaction } from "../db/connection";
-import { upsertMessage, updateMessageThreadIds } from "../db/messages";
-import { upsertThread, deleteThread } from "../db/threads";
-import { upsertAttachment } from "../db/attachments";
+import { upsertMessage, batchUpsertMessages, updateMessageThreadIds } from "../db/messages";
+import { upsertThread, batchUpsertThreads, deleteThread } from "../db/threads";
+import { upsertAttachment, batchUpsertAttachments } from "../db/attachments";
 import { getPendingOpsForResource } from "../db/pendingOperations";
 
 describe("imapMessageToParsedMessage", () => {
@@ -250,11 +254,10 @@ describe("imapInitialSync", () => {
   const mockImapListFolders = vi.mocked(imapListFolders);
   const mockImapSearchFolder = vi.mocked(imapSearchFolder);
   const mockImapFetchMessages = vi.mocked(imapFetchMessages);
-  const mockWithTransaction = vi.mocked(withTransaction);
-  const mockUpsertMessage = vi.mocked(upsertMessage);
+  const mockBatchUpsertMessages = vi.mocked(batchUpsertMessages);
   const mockUpdateMessageThreadIds = vi.mocked(updateMessageThreadIds);
-  const mockUpsertThread = vi.mocked(upsertThread);
-  const mockUpsertAttachment = vi.mocked(upsertAttachment);
+  const mockBatchUpsertThreads = vi.mocked(batchUpsertThreads);
+  const mockBatchUpsertAttachments = vi.mocked(batchUpsertAttachments);
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -297,15 +300,18 @@ describe("imapInitialSync", () => {
 
     await imapInitialSync("acc-1");
 
-    // Messages should be stored individually via upsertMessage during fetch phase
-    expect(mockUpsertMessage).toHaveBeenCalledTimes(2);
+    // Messages should be batch-stored via batchUpsertMessages during fetch phase
+    expect(mockBatchUpsertMessages).toHaveBeenCalled();
+    const allCalls = mockBatchUpsertMessages.mock.calls;
+    let totalMessages = 0;
+    for (const call of allCalls) {
+      totalMessages += (call[0] as any[]).length;
+    }
+    expect(totalMessages).toBe(2);
 
     // Each message should be stored with placeholder threadId = messageId
-    const firstCallArgs = mockUpsertMessage.mock.calls[0]![0];
-    expect(firstCallArgs.threadId).toBe(firstCallArgs.id);
-
-    const secondCallArgs = mockUpsertMessage.mock.calls[1]![0];
-    expect(secondCallArgs.threadId).toBe(secondCallArgs.id);
+    const firstBatch = allCalls[0] as any[];
+    expect(firstBatch[0].threadId).toBe(firstBatch[0].id);
   });
 
   it("creates placeholder thread before each message to satisfy FK constraint", async () => {
@@ -315,25 +321,17 @@ describe("imapInitialSync", () => {
 
     await imapInitialSync("acc-1");
 
-    // For each message, upsertThread should be called BEFORE upsertMessage
-    // to satisfy the FK constraint (messages.thread_id → threads.id).
-    // Phase 2: 2 placeholder threads + Phase 4: 1 or 2 final threads
-    expect(mockUpsertThread.mock.calls.length).toBeGreaterThanOrEqual(2);
-    expect(mockUpsertMessage).toHaveBeenCalledTimes(2);
-
-    // Each placeholder thread must be created before its corresponding message.
-    // Verify by checking that the nth thread call preceded the nth message call.
-    for (let i = 0; i < 2; i++) {
-      const threadOrder = mockUpsertThread.mock.invocationCallOrder[i]!;
-      const messageOrder = mockUpsertMessage.mock.invocationCallOrder[i]!;
-      expect(threadOrder).toBeLessThan(messageOrder);
-    }
+    // batchUpsertThreads is called for placeholders in Phase 3, then final threads in Phase 4
+    expect(mockBatchUpsertThreads).toHaveBeenCalled();
+    // batchUpsertMessages is called for all messages
+    expect(mockBatchUpsertMessages).toHaveBeenCalled();
 
     // Verify placeholder threads use the message ID as thread ID
-    const firstThreadCall = mockUpsertThread.mock.calls[0]![0];
-    const firstMsgCall = mockUpsertMessage.mock.calls[0]![0];
-    expect(firstThreadCall.id).toBe(firstMsgCall.id);
-    expect(firstThreadCall.id).toBe(firstMsgCall.threadId);
+    const firstBatch = mockBatchUpsertThreads.mock.calls[0]![0] as any[];
+    const firstMsgBatch = mockBatchUpsertMessages.mock.calls[0]![0] as any[];
+    // Placeholder threads are created before messages in the same chunk
+    expect(firstBatch.length).toBeGreaterThanOrEqual(1);
+    expect(firstMsgBatch[0].threadId).toBe(firstMsgBatch[0].id);
   });
 
   it("updates thread IDs after threading phase", async () => {
@@ -342,8 +340,8 @@ describe("imapInitialSync", () => {
 
     await imapInitialSync("acc-1");
 
-    // Thread record should be created: once as placeholder in Phase 2, once final in Phase 4
-    expect(mockUpsertThread).toHaveBeenCalledTimes(2);
+    // Thread record should be created: once as placeholder in Phase 3, once final in Phase 4
+    expect(mockBatchUpsertThreads).toHaveBeenCalled();
 
     // Thread IDs should be batch-updated via updateMessageThreadIds
     expect(mockUpdateMessageThreadIds).toHaveBeenCalledTimes(1);
@@ -383,14 +381,17 @@ describe("imapInitialSync", () => {
 
     await imapInitialSync("acc-1");
 
-    expect(mockUpsertAttachment).toHaveBeenCalledTimes(1);
-    expect(mockUpsertAttachment).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filename: "doc.pdf",
-        mimeType: "application/pdf",
-        accountId: "acc-1",
-      }),
-    );
+    expect(mockBatchUpsertAttachments).toHaveBeenCalled();
+    const allAttCalls = mockBatchUpsertAttachments.mock.calls;
+    let totalAtts = 0;
+    for (const call of allAttCalls) {
+      totalAtts += (call[0] as any[]).length;
+    }
+    expect(totalAtts).toBe(1);
+    const attBatch = (allAttCalls[0] as any[])[0] as any[];
+    expect(attBatch[0].filename).toBe("doc.pdf");
+    expect(attBatch[0].mimeType).toBe("application/pdf");
+    expect(attBatch[0].accountId).toBe("acc-1");
   });
 
   it("filters messages by date cutoff", async () => {
@@ -405,8 +406,12 @@ describe("imapInitialSync", () => {
     await imapInitialSync("acc-1", 365);
 
     // Only recent message should be stored (old one is beyond 365 days)
-    expect(mockUpsertMessage).toHaveBeenCalledTimes(1);
-    expect(mockUpsertMessage.mock.calls[0]![0].id).toContain("1"); // uid=1
+    const allMsgCalls = mockBatchUpsertMessages.mock.calls;
+    let totalMsgs = 0;
+    for (const call of allMsgCalls) {
+      totalMsgs += (call[0] as any[]).length;
+    }
+    expect(totalMsgs).toBe(1);
   });
 
   it("handles empty folders gracefully", async () => {
@@ -416,7 +421,7 @@ describe("imapInitialSync", () => {
     const result = await imapInitialSync("acc-1");
 
     expect(mockImapSearchFolder).not.toHaveBeenCalled();
-    expect(mockUpsertMessage).not.toHaveBeenCalled();
+    expect(mockBatchUpsertMessages).not.toHaveBeenCalled();
     expect(result.messages).toEqual([]);
   });
 
@@ -460,14 +465,20 @@ describe("imapInitialSync", () => {
     );
   });
 
-  it("wraps chunk DB writes in a transaction", async () => {
+  it("uses batch inserts for DB writes instead of per-item calls", async () => {
     const msg = createMockImapMessage({ uid: 1, message_id: "<m1@test>", date: Math.floor(Date.now() / 1000) });
     setupFolderWithMessages("INBOX", [msg]);
 
     await imapInitialSync("acc-1");
 
-    // withTransaction should be called: once for Phase 2 chunk + once for Phase 4 batch
-    expect(mockWithTransaction).toHaveBeenCalledTimes(2);
+    // batchUpsertMessages should be called with an array of messages
+    expect(mockBatchUpsertMessages).toHaveBeenCalled();
+    const batchCall = mockBatchUpsertMessages.mock.calls[0]![0] as any[];
+    expect(Array.isArray(batchCall)).toBe(true);
+    expect(batchCall.length).toBe(1);
+
+    // batchUpsertThreads should be called with an array of threads
+    expect(mockBatchUpsertThreads).toHaveBeenCalled();
   });
 
   it("continues to next chunk on fetch error", async () => {

@@ -3,9 +3,9 @@ import { initialSync, deltaSync, type SyncProgress } from "./sync";
 import { getAccount, clearAccountHistoryId } from "../db/accounts";
 import { getSetting } from "../db/settings";
 import { getThreadCountForAccount, deleteAllThreadsForAccount } from "../db/threads";
-import { deleteAllMessagesForAccount } from "../db/messages";
+import { deleteAllMessagesForAccount, countBrokenMessagesForAccount } from "../db/messages";
 import { imapInitialSync, imapDeltaSync } from "../imap/imapSync";
-import { clearAllFolderSyncStates } from "../db/folderSyncState";
+import { clearAllFolderSyncStates, getAllFolderSyncStates } from "../db/folderSyncState";
 import { ensureFreshToken } from "../oauth/oauthTokenManager";
 import { hasCalendarSupport, getCalendarProvider } from "../calendar/providerFactory";
 import { getVisibleCalendars, upsertCalendar, updateCalendarSyncToken } from "../db/calendars";
@@ -97,6 +97,55 @@ async function syncImapAccount(accountId: string): Promise<void> {
   const syncPeriodStr = await getSetting("sync_period_days");
   const syncDays = parseInt(syncPeriodStr ?? "365", 10) || 365;
 
+  // Pre-sync check: if there are broken messages (raw MIME stored instead of parsed HTML/text),
+  // force a full re-sync BEFORE running delta sync. This catches the case where the initial
+  // sync stored broken data and delta sync can't fix it.
+  const preSyncBrokenCount = await countBrokenMessagesForAccount(accountId);
+  if (preSyncBrokenCount > 0) {
+    console.warn(
+      `[syncManager] Found ${preSyncBrokenCount} broken messages for IMAP account ${accountId} — ` +
+      `forcing full re-sync before delta sync`,
+    );
+    await clearAccountHistoryId(accountId);
+    await clearAllFolderSyncStates(accountId);
+    await deleteAllMessagesForAccount(accountId);
+    await deleteAllThreadsForAccount(accountId);
+    await imapInitialSync(accountId, syncDays, (progress) => {
+      statusCallback?.(accountId, "syncing", {
+        phase: mapImapPhase(progress.phase),
+        current: progress.current,
+        total: progress.total,
+      });
+    });
+    return;
+  }
+
+  // Pre-sync check: if sync states exist but thread count is 0, the initial sync
+  // likely failed to store any messages (e.g., async-imap returned no bodies).
+  // Force a full re-sync to recover.
+  if (account.history_id) {
+    const preSyncThreadCount = await getThreadCountForAccount(accountId);
+    const preSyncStates = await getAllFolderSyncStates(accountId);
+    if (preSyncThreadCount === 0 && preSyncStates.length > 0) {
+      console.warn(
+        `[syncManager] IMAP account ${accountId} has ${preSyncStates.length} folder sync states ` +
+        `but 0 threads — initial sync likely failed, forcing full re-sync`,
+      );
+      await clearAccountHistoryId(accountId);
+      await clearAllFolderSyncStates(accountId);
+      await deleteAllMessagesForAccount(accountId);
+      await deleteAllThreadsForAccount(accountId);
+      await imapInitialSync(accountId, syncDays, (progress) => {
+        statusCallback?.(accountId, "syncing", {
+          phase: mapImapPhase(progress.phase),
+          current: progress.current,
+          total: progress.total,
+        });
+      });
+      return;
+    }
+  }
+
   if (account.history_id) {
     // Delta sync — IMAP uses folder-level UID tracking
     const result = await imapDeltaSync(accountId, syncDays);
@@ -104,12 +153,35 @@ async function syncImapAccount(accountId: string): Promise<void> {
     // Recovery: if delta sync found nothing new but the DB has no threads,
     // the previous initial sync likely failed or stored data incorrectly.
     // Force a full re-sync to recover.
+    // Also recover if folder sync states exist but have last_uid = 0,
+    // meaning the initial sync saved state without actually storing messages.
+    // Also recover if ALL existing folders returned 0 new UIDs — this means
+    // the initial sync may have stored broken data (e.g., empty bodies from
+    // async-imap parsing issues) and delta sync can't find anything new.
+    // Also recover if messages have broken body content (raw MIME or empty bodies).
     if (result.messages.length === 0) {
       const threadCount = await getThreadCountForAccount(accountId);
-      if (threadCount === 0) {
-        console.warn(`[syncManager] IMAP delta sync returned 0 new messages and DB has 0 threads for ${accountId} — forcing full re-sync`);
+      const syncStates = await getAllFolderSyncStates(accountId);
+      const hasEmptySyncState = syncStates.some((s) => s.last_uid === 0);
+      const allFoldersEmpty =
+        result.foldersChecked !== undefined &&
+        result.foldersChecked > 0 &&
+        result.foldersWithNewUids === 0;
+      const brokenMsgCount = await countBrokenMessagesForAccount(accountId);
+      const hasBrokenMessages = brokenMsgCount > 0;
+      if (threadCount === 0 || hasEmptySyncState || allFoldersEmpty || hasBrokenMessages) {
+        console.warn(
+          `[syncManager] IMAP delta sync returned 0 new messages` +
+          (threadCount === 0 ? ` and DB has 0 threads` : "") +
+          (hasEmptySyncState ? ` and folder sync states have last_uid=0` : "") +
+          (allFoldersEmpty ? ` and all ${result.foldersChecked} folders had 0 new UIDs` : "") +
+          (hasBrokenMessages ? ` and ${brokenMsgCount} messages have broken body content` : "") +
+          ` for ${accountId} — forcing full re-sync`,
+        );
         await clearAccountHistoryId(accountId);
         await clearAllFolderSyncStates(accountId);
+        await deleteAllMessagesForAccount(accountId);
+        await deleteAllThreadsForAccount(accountId);
         await imapInitialSync(accountId, syncDays, (progress) => {
           statusCallback?.(accountId, "syncing", {
             phase: mapImapPhase(progress.phase),

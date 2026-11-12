@@ -257,7 +257,7 @@ pub async fn fetch_messages(
     // Some IMAP servers return empty streams for UID FETCH despite valid UIDs.
     let fetches = tokio::time::timeout(IMAP_FETCH_TIMEOUT, async {
         let stream = session
-            .uid_fetch(uid_range, "UID FLAGS INTERNALDATE BODY.PEEK[]")
+            .uid_fetch(uid_range, "UID FLAGS INTERNALDATE RFC822")
             .await
             .map_err(|e| format!("UID FETCH {folder} uids={uid_range} failed: {e}"))?;
         Ok::<_, String>(stream.collect::<Vec<_>>().await)
@@ -280,12 +280,12 @@ pub async fn fetch_messages(
     // If async-imap returned nothing but messages exist, fallback to raw TCP fetch
     if fetches.is_empty() && mailbox.exists > 0 {
         log::warn!("IMAP {folder}: async-imap returned 0 items but exists={}. Falling back to raw TCP fetch...", mailbox.exists);
-        // Return early with raw fetch result — caller doesn't need to know about the fallback
         return Err(format!("ASYNC_IMAP_EMPTY:{folder}"));
     }
 
     let parser = MessageParser::default();
     let mut messages = Vec::new();
+    let mut no_body_count = 0u32;
     for fetch in &fetches {
         let uid = match fetch.uid {
             Some(u) => u,
@@ -294,7 +294,11 @@ pub async fn fetch_messages(
 
         let raw = match fetch.body() {
             Some(b) => b,
-            None => { log::warn!("IMAP FETCH {folder}: UID {uid} has no body"); continue; }
+            None => {
+                no_body_count += 1;
+                log::warn!("IMAP FETCH {folder}: UID {uid} has no body");
+                continue;
+            }
         };
 
         let raw_size = raw.len() as u32;
@@ -314,6 +318,13 @@ pub async fn fetch_messages(
                 log::warn!("Failed to parse message UID {uid}: {e}");
             }
         }
+    }
+
+    // If all fetched messages have no body, async-imap is not parsing the server's
+    // response correctly — fall back to raw TCP fetch which handles literals manually.
+    if messages.is_empty() && no_body_count > 0 {
+        log::warn!("IMAP {folder}: async-imap returned {} items but {} had no body. Falling back to raw TCP fetch...", fetches.len(), no_body_count);
+        return Err(format!("ASYNC_IMAP_EMPTY:{folder}"));
     }
 
     Ok(ImapFetchResult {
@@ -336,7 +347,7 @@ pub async fn fetch_message_body(
     let uid_str = uid.to_string();
     let fetches: Vec<_> = tokio::time::timeout(IMAP_FETCH_TIMEOUT, async {
         let stream = session
-            .uid_fetch(&uid_str, "UID FLAGS BODY.PEEK[]")
+            .uid_fetch(&uid_str, "UID FLAGS RFC822")
             .await
             .map_err(|e| format!("UID FETCH failed: {e}"))?;
         Ok::<_, String>(stream.collect::<Vec<_>>().await)
@@ -564,7 +575,7 @@ pub async fn get_folder_status(
 /// Fetch a specific MIME part (attachment) by UID and part ID.
 /// Returns the decoded binary data as standard base64.
 ///
-/// Fetches the full message via `BODY.PEEK[]`, parses it with `mail-parser`
+/// Fetches the full message via `RFC822`, parses it with `mail-parser`
 /// (which handles all content-transfer-encoding decoding), and extracts
 /// the requested part's decoded bytes.
 pub async fn fetch_attachment(
@@ -581,7 +592,7 @@ pub async fn fetch_attachment(
     let uid_str = uid.to_string();
     let fetches: Vec<_> = tokio::time::timeout(IMAP_FETCH_TIMEOUT, async {
         let stream = session
-            .uid_fetch(&uid_str, "BODY.PEEK[]")
+            .uid_fetch(&uid_str, "RFC822")
             .await
             .map_err(|e| format!("UID FETCH attachment failed: {e}"))?;
         Ok::<_, String>(stream.collect::<Vec<_>>().await)
@@ -654,7 +665,7 @@ pub async fn fetch_raw_message(
     let uid_str = uid.to_string();
     let fetches: Vec<_> = tokio::time::timeout(IMAP_FETCH_TIMEOUT, async {
         let stream = session
-            .uid_fetch(&uid_str, "BODY.PEEK[]")
+            .uid_fetch(&uid_str, "RFC822")
             .await
             .map_err(|e| format!("UID FETCH failed: {e}"))?;
         Ok::<_, String>(stream.collect::<Vec<_>>().await)
@@ -850,6 +861,8 @@ pub async fn sync_folder(
     // Fetch in batches on the SAME session
     let parser = MessageParser::default();
     let mut all_messages = Vec::new();
+    let mut all_no_body_count = 0u32;
+    let mut all_fetch_count = 0u32;
     let bs = batch_size as usize;
 
     for chunk in uids.chunks(bs) {
@@ -861,7 +874,7 @@ pub async fn sync_folder(
 
         let fetches = tokio::time::timeout(IMAP_FETCH_TIMEOUT, async {
             let stream = session
-                .uid_fetch(&uid_set, "UID FLAGS INTERNALDATE BODY.PEEK[]")
+                .uid_fetch(&uid_set, "UID FLAGS INTERNALDATE RFC822")
                 .await
                 .map_err(|e| format!("UID FETCH {folder} uids={uid_set} failed: {e}"))?;
             Ok::<_, String>(stream.collect::<Vec<_>>().await)
@@ -873,13 +886,18 @@ pub async fn sync_folder(
         for r in raw_fetches {
             match r {
                 Ok(f) => {
+                    all_fetch_count += 1;
                     let uid = match f.uid {
                         Some(u) => u,
                         None => { log::warn!("IMAP sync_folder {folder}: response missing UID"); continue; }
                     };
                     let raw = match f.body() {
                         Some(b) => b,
-                        None => { log::warn!("IMAP sync_folder {folder}: UID {uid} has no body"); continue; }
+                        None => {
+                            all_no_body_count += 1;
+                            log::warn!("IMAP sync_folder {folder}: UID {uid} has no body");
+                            continue;
+                        }
                     };
                     let raw_size = raw.len() as u32;
                     let flags: Vec<_> = f.flags().collect();
@@ -896,6 +914,13 @@ pub async fn sync_folder(
                 Err(e) => log::warn!("IMAP sync_folder fetch stream error in {folder}: {e}"),
             }
         }
+    }
+
+    // If all fetched messages have no body, async-imap is not parsing the server's
+    // response correctly — fall back to raw TCP fetch.
+    if all_messages.is_empty() && all_no_body_count > 0 {
+        log::warn!("IMAP sync_folder {folder}: async-imap returned {} items but {} had no body. Falling back to raw TCP fetch...", all_fetch_count, all_no_body_count);
+        return Err(format!("ASYNC_IMAP_EMPTY:{folder}"));
     }
 
     log::info!("IMAP sync_folder {folder}: fetched {} messages", all_messages.len());
@@ -1002,7 +1027,7 @@ pub async fn raw_fetch_messages(
     };
 
     // UID FETCH with full body
-    let fetch_cmd = format!("a3 UID FETCH {uid_range} (UID FLAGS INTERNALDATE BODY.PEEK[])\r\n");
+    let fetch_cmd = format!("a3 UID FETCH {uid_range} (UID FLAGS INTERNALDATE RFC822)\r\n");
     reader.get_mut().write_all(fetch_cmd.as_bytes()).await
         .map_err(|e| format!("FETCH write: {e}"))?;
 
@@ -1571,6 +1596,65 @@ fn detect_special_use(name: &async_imap::types::Name) -> Option<String> {
     }
 }
 
+/// Extract the HTML body from a parsed message.
+///
+/// Uses `body_html(0)` from mail-parser, but falls back to walking the MIME tree
+/// manually if the result appears to be raw multipart content (a known issue with
+/// `multipart/related` structures in mail-parser 0.9).
+fn extract_body_html(message: &mail_parser::Message, fallback_text: Option<String>) -> Option<String> {
+    // Try the standard API first
+    if let Some(html) = message.body_html(0) {
+        let html_str = html.as_ref();
+        // Check if this looks like raw MIME content rather than actual HTML.
+        // Raw multipart content starts with boundary markers like "------=_Part_..."
+        // or contains "Content-Type:" headers, which would not appear in valid HTML.
+        let trimmed = html_str.trim_start();
+        let looks_like_raw_mime = trimmed.starts_with("--")
+            || html_str.contains("Content-Type:")
+            || html_str.contains("Content-Transfer-Encoding:");
+        if !looks_like_raw_mime {
+            return Some(html.to_string());
+        }
+        log::warn!(
+            "IMAP: body_html(0) returned raw MIME content, falling back to MIME tree walk"
+        );
+    }
+
+    // Fallback: walk the MIME tree to find the first text/html part
+    find_html_part(message, 0)
+        .or(fallback_text.map(|text| {
+            // Last resort: convert plain text to basic HTML
+            let escaped = text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+            format!("<html><body><pre>{}</pre></body></html>", escaped)
+        }))
+}
+
+/// Recursively walk the MIME tree to find the first text/html part.
+fn find_html_part(message: &mail_parser::Message, part_idx: usize) -> Option<String> {
+    use mail_parser::PartType;
+
+    let part = message.parts.get(part_idx)?;
+    if let PartType::Multipart(children) = &part.body {
+        // Search children in reverse order (HTML usually comes after plain text)
+        for &child_idx in children.iter().rev() {
+            if let Some(html) = find_html_part(message, child_idx) {
+                return Some(html);
+            }
+        }
+    } else {
+        // Check if this part is text/html
+        if let Some(ct) = part.content_type() {
+            let ctype = ct.ctype();
+            let subtype = ct.subtype().unwrap_or("");
+            if ctype == "text" && subtype == "html" {
+                // Extract the decoded body content
+                return part.text_contents().map(|s| s.to_string());
+            }
+        }
+    }
+    None
+}
+
 /// Parse a raw email message into our ImapMessage struct.
 ///
 /// `internal_date`: optional INTERNALDATE timestamp from the IMAP server,
@@ -1623,9 +1707,9 @@ fn parse_message(
     let bcc_addresses = format_address_list(message.bcc());
     let reply_to = format_address_list(message.reply_to());
 
-    // Body
+    // Body — extract HTML and text, with fallback for broken multipart/related parsing
     let body_text = message.body_text(0).map(|s| s.to_string());
-    let body_html = message.body_html(0).map(|s| s.to_string());
+    let body_html = extract_body_html(&message, body_text.clone());
 
     // Generate snippet from text body (truncate at char boundary)
     let snippet = body_text.as_ref().map(|text| {

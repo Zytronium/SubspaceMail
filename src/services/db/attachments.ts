@@ -13,7 +13,7 @@ export interface DbAttachment {
   local_path: string | null;
 }
 
-export async function upsertAttachment(att: {
+export interface UpsertAttachmentInput {
   id: string;
   messageId: string;
   accountId: string;
@@ -23,25 +23,41 @@ export async function upsertAttachment(att: {
   gmailAttachmentId: string | null;
   contentId: string | null;
   isInline: boolean;
-}): Promise<void> {
+}
+
+export async function upsertAttachment(att: UpsertAttachmentInput): Promise<void> {
+  await batchUpsertAttachments([att]);
+}
+
+/**
+ * Batch upsert multiple attachments in a single SQL statement.
+ */
+export async function batchUpsertAttachments(attachments: UpsertAttachmentInput[]): Promise<void> {
+  if (attachments.length === 0) return;
   const db = await getDb();
+  const cols = "id, message_id, account_id, filename, mime_type, size, gmail_attachment_id, content_id, is_inline";
+  const perRow = 9;
+  const placeholders = attachments.map((_, ri) => {
+    const params: string[] = [];
+    for (let ci = 0; ci < perRow; ci++) {
+      params.push(`$${ri * perRow + ci + 1}`);
+    }
+    return `(${params.join(", ")})`;
+  }).join(", ");
+  const allParams: unknown[] = [];
+  for (const att of attachments) {
+    allParams.push(
+      att.id, att.messageId, att.accountId, att.filename, att.mimeType,
+      att.size, att.gmailAttachmentId, att.contentId, att.isInline ? 1 : 0,
+    );
+  }
   await db.execute(
-    `INSERT INTO attachments (id, message_id, account_id, filename, mime_type, size, gmail_attachment_id, content_id, is_inline)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `INSERT INTO attachments (${cols}) VALUES ${placeholders}
      ON CONFLICT(id) DO UPDATE SET
-       filename = $4, mime_type = $5, size = $6,
-       gmail_attachment_id = $7, content_id = $8, is_inline = $9`,
-    [
-      att.id,
-      att.messageId,
-      att.accountId,
-      att.filename,
-      att.mimeType,
-      att.size,
-      att.gmailAttachmentId,
-      att.contentId,
-      att.isInline ? 1 : 0,
-    ],
+       filename = excluded.filename, mime_type = excluded.mime_type,
+       size = excluded.size, gmail_attachment_id = excluded.gmail_attachment_id,
+       content_id = excluded.content_id, is_inline = excluded.is_inline`,
+    allParams,
   );
 }
 

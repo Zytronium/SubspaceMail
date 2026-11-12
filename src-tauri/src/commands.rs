@@ -261,9 +261,36 @@ pub async fn imap_sync_folder(
     since_date: Option<String>,
 ) -> Result<ImapFolderSyncResult, String> {
     let mut session = imap_client::connect(&config).await?;
-    let result = imap_client::sync_folder(&mut session, &folder, batch_size, since_date).await;
+    let result = imap_client::sync_folder(&mut session, &folder, batch_size, since_date.clone()).await;
     let _ = session.logout().await;
-    result
+    match result {
+        Ok(r) => Ok(r),
+        Err(e) if e.starts_with("ASYNC_IMAP_EMPTY:") => {
+            // async-imap can't parse this server's responses — use raw TCP fallback
+            log::info!("Falling back to raw TCP sync for folder {folder}");
+            // For sync, we need to get the UID range from the search first, then raw fetch
+            // Since raw_fetch_messages needs a uid_range, we do a search first
+            let mut session2 = imap_client::connect(&config).await?;
+            let search_result = imap_client::search_folder(&mut session2, &folder, since_date).await?;
+            let _ = session2.logout().await;
+            let uids: Vec<u32> = search_result.uids.into_iter().collect();
+            if uids.is_empty() {
+                return Ok(ImapFolderSyncResult {
+                    uids: vec![],
+                    messages: vec![],
+                    folder_status: search_result.folder_status,
+                });
+            }
+            let uid_range = format!("{}:{}", uids.first().unwrap_or(&1), uids.last().unwrap_or(&1));
+            let raw_result = imap_client::raw_fetch_messages(&config, &folder, &uid_range).await?;
+            Ok(ImapFolderSyncResult {
+                uids: uids.into_iter().collect(),
+                messages: raw_result.messages,
+                folder_status: raw_result.folder_status,
+            })
+        }
+        Err(e) => Err(e),
+    }
 }
 
 #[tauri::command]
