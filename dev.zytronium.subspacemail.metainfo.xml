@@ -13,7 +13,7 @@
   <url type="bugtracker">https://github.com/Zytronium/SubspaceMail/issues</url>
   <launchable type="desktop-id">dev.zytronium.subspacemail.desktop</launchable>
   <releases>
-    <release version="0.4.21" date="2026-02-20" /> <!-- x-release-please-version -->
+    <release version="0.4.22" date="2026-11-11" /> <!-- x-release-please-version -->
   </releases>
   <developer id="dev.zytronium">
     <name>Zytronium</name>
