@@ -1750,13 +1750,23 @@ function AboutTab() {
           </div>
         </div>
         <p className="text-sm text-text-secondary leading-relaxed">
-          A fast, open-source desktop email client built with privacy in mind. Your emails stay on your machine — no cloud, no tracking.
+          A fast, open-source, and beautiful desktop email client built with privacy in mind. Your emails stay on your machine (and your email provider's server), with no telemetry. Forked from Velo mail.
         </p>
       </Section>
 
       <Section title="Links">
         <div className="space-y-1">
-          {/* FLAG: Velo website link - Subspace Mail does not have a website yet (formerly https://velomail.app) */}
+          <button
+            onClick={() => openExternal("https://subspace.zytronium.dev/")}
+            className="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg bg-bg-secondary hover:bg-bg-hover transition-colors text-left"
+          >
+            <Globe size={16} className="text-text-tertiary shrink-0" />
+            <div className="min-w-0 flex-1">
+              <span className="text-sm text-text-primary">Website</span>
+              <p className="text-xs text-text-tertiary">subspace.zytronium.dev</p>
+            </div>
+            <ExternalLink size={14} className="text-text-tertiary shrink-0" />
+          </button>
           <button
             onClick={() => openExternal("https://github.com/Zytronium/SubspaceMail")}
             className="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg bg-bg-secondary hover:bg-bg-hover transition-colors text-left"
