@@ -4,6 +4,7 @@ import { ThreadCard } from "../email/ThreadCard";
 import { CategoryTabs } from "../email/CategoryTabs";
 import { SearchBar } from "../search/SearchBar";
 import { EmailListSkeleton } from "../ui/Skeleton";
+import { Select } from "../ui/Select";
 import { useThreadStore, type Thread } from "@/stores/threadStore";
 import { useAccountStore } from "@/stores/accountStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -516,15 +517,16 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
             {filteredThreads.length} conversation{filteredThreads.length !== 1 ? "s" : ""}
           </span>
         </div>
-        <select
+        <Select
           value={readFilter}
-          onChange={(e) => setReadFilter(e.target.value as "all" | "read" | "unread")}
-          className="text-xs bg-bg-tertiary text-text-secondary px-2 py-1 rounded border border-border-primary"
-        >
-          <option value="all">All</option>
-          <option value="unread">Unread</option>
-          <option value="read">Read</option>
-        </select>
+          onChange={(val) => setReadFilter(val as "all" | "read" | "unread")}
+          options={[
+            { value: "all", label: "All" },
+            { value: "unread", label: "Unread" },
+            { value: "read", label: "Read" },
+          ]}
+          className="text-xs"
+        />
       </div>
 
       {/* Category tabs (inbox + split mode only) */}

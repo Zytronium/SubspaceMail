@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Trash2, Pencil, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { TextField } from "@/components/ui/TextField";
+import { Select } from "@/components/ui/Select";
 import { useAccountStore } from "@/stores/accountStore";
 import { getLabelsForAccount, type DbLabel } from "@/services/db/labels";
 import {
@@ -213,16 +214,15 @@ export function SmartLabelEditor() {
           {labels.length > 0 ? (
             <div>
               <div className="text-xs font-medium text-text-secondary mb-1.5">Label</div>
-              <select
+              <Select
                 value={labelId}
-                onChange={(e) => setLabelId(e.target.value)}
-                className="w-full bg-bg-tertiary text-text-primary text-xs px-2 py-1.5 rounded border border-border-primary"
-              >
-                <option value="">Select a label...</option>
-                {labels.map((l) => (
-                  <option key={l.id} value={l.id}>{l.name}</option>
-                ))}
-              </select>
+                onChange={(val) => setLabelId(val)}
+                options={[
+                  { value: "", label: "Select a label..." },
+                  ...labels.map((l) => ({ value: l.id, label: l.name })),
+                ]}
+                className="w-full"
+              />
             </div>
           ) : (
             <div className="text-xs text-text-tertiary">

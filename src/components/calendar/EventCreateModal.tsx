@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { TextField } from "@/components/ui/TextField";
+import { Select } from "@/components/ui/Select";
 import type { DbCalendar } from "@/services/db/calendars";
 
 interface EventCreateModalProps {
@@ -55,18 +56,15 @@ export function EventCreateModal({ calendars, onClose, onCreate }: EventCreateMo
         {calendars && calendars.length > 1 && (
           <div>
             <label className="text-xs text-text-secondary block mb-1">Calendar</label>
-            <select
+            <Select
               value={calendarId}
-              onChange={(e) => setCalendarId(e.target.value)}
-              className="w-full px-3 py-1.5 bg-bg-tertiary border border-border-primary rounded text-sm text-text-primary outline-none focus:border-accent"
-            >
-              {calendars.map((cal) => (
-                <option key={cal.id} value={cal.id}>
-                  {cal.display_name ?? "Calendar"}
-                  {cal.is_primary ? " (Primary)" : ""}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setCalendarId(val)}
+              options={calendars.map((cal) => ({
+                value: cal.id,
+                label: `${cal.display_name ?? "Calendar"}${cal.is_primary ? " (Primary)" : ""}`,
+              }))}
+              className="w-full"
+            />
           </div>
         )}
 

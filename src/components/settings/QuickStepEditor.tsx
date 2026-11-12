@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { Trash2, Pencil, Plus, GripVertical, ChevronDown } from "lucide-react";
+import { Trash2, Pencil, Plus, GripVertical } from "lucide-react";
+import { Select } from "@/components/ui/Select";
 import { useAccountStore } from "@/stores/accountStore";
 import { getLabelsForAccount, type DbLabel } from "@/services/db/labels";
 import {
@@ -273,57 +274,48 @@ export function QuickStepEditor() {
                       {index + 1}.
                     </span>
                     <div className="flex-1 space-y-1">
-                      <div className="relative">
-                        <select
-                          value={action.type}
-                          onChange={(e) => updateAction(index, e.target.value as QuickStepActionType)}
-                          className="w-full bg-bg-tertiary text-text-primary text-xs px-2 py-1.5 rounded border border-border-primary appearance-none pr-6"
-                        >
-                          {ACTION_TYPE_METADATA.map((m) => (
-                            <option key={m.type} value={m.type}>
-                              {m.label}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none" />
-                      </div>
+                      <Select
+                        value={action.type}
+                        onChange={(val) => updateAction(index, val as QuickStepActionType)}
+                        options={ACTION_TYPE_METADATA.map((m) => ({ value: m.type, label: m.label }))}
+                        className="w-full"
+                      />
                       {needsLabelParam && labels.length > 0 && (
-                        <select
+                        <Select
                           value={action.params?.labelId ?? ""}
-                          onChange={(e) => updateActionParams(index, { labelId: e.target.value })}
-                          className="w-full bg-bg-tertiary text-text-primary text-xs px-2 py-1 rounded border border-border-primary"
-                        >
-                          <option value="">Select label...</option>
-                          {labels.map((l) => (
-                            <option key={l.id} value={l.id}>{l.name}</option>
-                          ))}
-                        </select>
+                          onChange={(val) => updateActionParams(index, { labelId: val })}
+                          options={[
+                            { value: "", label: "Select label..." },
+                            ...labels.map((l) => ({ value: l.id, label: l.name })),
+                          ]}
+                          className="w-full"
+                        />
                       )}
                       {needsCategoryParam && (
-                        <select
+                        <Select
                           value={action.params?.category ?? ""}
-                          onChange={(e) => updateActionParams(index, { category: e.target.value })}
-                          className="w-full bg-bg-tertiary text-text-primary text-xs px-2 py-1 rounded border border-border-primary"
-                        >
-                          <option value="">Select category...</option>
-                          {ALL_CATEGORIES.map((cat) => (
-                            <option key={cat} value={cat}>{cat}</option>
-                          ))}
-                        </select>
+                          onChange={(val) => updateActionParams(index, { category: val })}
+                          options={[
+                            { value: "", label: "Select category..." },
+                            ...ALL_CATEGORIES.map((cat) => ({ value: cat, label: cat })),
+                          ]}
+                          className="w-full"
+                        />
                       )}
                       {needsSnoozeDuration && (
-                        <select
-                          value={action.params?.snoozeDuration ?? ""}
-                          onChange={(e) => updateActionParams(index, { snoozeDuration: Number(e.target.value) })}
-                          className="w-full bg-bg-tertiary text-text-primary text-xs px-2 py-1 rounded border border-border-primary"
-                        >
-                          <option value="">Select duration...</option>
-                          <option value={3600000}>1 hour</option>
-                          <option value={14400000}>4 hours</option>
-                          <option value={86400000}>Tomorrow</option>
-                          <option value={172800000}>2 days</option>
-                          <option value={604800000}>1 week</option>
-                        </select>
+                        <Select
+                          value={String(action.params?.snoozeDuration ?? "")}
+                          onChange={(val) => updateActionParams(index, { snoozeDuration: Number(val) })}
+                          options={[
+                            { value: "", label: "Select duration..." },
+                            { value: "3600000", label: "1 hour" },
+                            { value: "14400000", label: "4 hours" },
+                            { value: "86400000", label: "Tomorrow" },
+                            { value: "172800000", label: "2 days" },
+                            { value: "604800000", label: "1 week" },
+                          ]}
+                          className="w-full"
+                        />
                       )}
                     </div>
                     <button

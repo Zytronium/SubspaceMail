@@ -59,6 +59,7 @@ import { ALL_NAV_ITEMS } from "@/components/layout/Sidebar";
 import type { SidebarNavItem } from "@/stores/uiStore";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
+import { Select } from "@/components/ui/Select";
 import appIcon from "@/assets/icon.png";
 
 type SettingsTab = "general" | "notifications" | "composing" | "mail-rules" | "people" | "accounts" | "shortcuts" | "ai" | "about";
@@ -410,59 +411,57 @@ export function SettingsPage() {
                 <>
                   <Section title="Appearance">
                     <SettingRow label="Theme">
-                      <select
+                      <Select
                         value={theme}
-                        onChange={(e) => {
-                          const val = e.target.value as "light" | "dark" | "system";
-                          setTheme(val);
-                          setSetting("theme", val);
+                        onChange={(val) => {
+                          const v = val as "light" | "dark" | "system";
+                          setTheme(v);
+                          setSetting("theme", v);
                         }}
-                        className="w-48 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none"
-                      >
-                        <option value="system">System</option>
-                        <option value="light">Light</option>
-                        <option value="dark">Dark</option>
-                      </select>
+                        options={[
+                          { value: "system", label: "System" },
+                          { value: "light", label: "Light" },
+                          { value: "dark", label: "Dark" },
+                        ]}
+                        className="w-48"
+                      />
                     </SettingRow>
                     <SettingRow label="Reading pane">
-                      <select
+                      <Select
                         value={readingPanePosition}
-                        onChange={(e) => {
-                          setReadingPanePosition(e.target.value as "right" | "bottom" | "hidden");
-                        }}
-                        className="w-48 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none"
-                      >
-                        <option value="right">Right</option>
-                        <option value="bottom">Bottom</option>
-                        <option value="hidden">Off</option>
-                      </select>
+                        onChange={(val) => setReadingPanePosition(val as "right" | "bottom" | "hidden")}
+                        options={[
+                          { value: "right", label: "Right" },
+                          { value: "bottom", label: "Bottom" },
+                          { value: "hidden", label: "Off" },
+                        ]}
+                        className="w-48"
+                      />
                     </SettingRow>
                     <SettingRow label="Email density">
-                      <select
+                      <Select
                         value={emailDensity}
-                        onChange={(e) => {
-                          setEmailDensity(e.target.value as "compact" | "default" | "spacious");
-                        }}
-                        className="w-48 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none"
-                      >
-                        <option value="compact">Compact</option>
-                        <option value="default">Default</option>
-                        <option value="spacious">Spacious</option>
-                      </select>
+                        onChange={(val) => setEmailDensity(val as "compact" | "default" | "spacious")}
+                        options={[
+                          { value: "compact", label: "Compact" },
+                          { value: "default", label: "Default" },
+                          { value: "spacious", label: "Spacious" },
+                        ]}
+                        className="w-48"
+                      />
                     </SettingRow>
                     <SettingRow label="Font size">
-                      <select
+                      <Select
                         value={fontScale}
-                        onChange={(e) => {
-                          setFontScale(e.target.value as "small" | "default" | "large" | "xlarge");
-                        }}
-                        className="w-48 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none"
-                      >
-                        <option value="small">Small</option>
-                        <option value="default">Default</option>
-                        <option value="large">Large</option>
-                        <option value="xlarge">Extra Large</option>
-                      </select>
+                        onChange={(val) => setFontScale(val as "small" | "default" | "large" | "xlarge")}
+                        options={[
+                          { value: "small", label: "Small" },
+                          { value: "default", label: "Default" },
+                          { value: "large", label: "Large" },
+                          { value: "xlarge", label: "Extra Large" },
+                        ]}
+                        className="w-48"
+                      />
                     </SettingRow>
                     <SettingRow label="Accent color">
                       <div className="flex items-center gap-2">
@@ -494,16 +493,15 @@ export function SettingsPage() {
                       </div>
                     </SettingRow>
                     <SettingRow label="Inbox view mode">
-                      <select
+                      <Select
                         value={inboxViewMode}
-                        onChange={(e) => {
-                          setInboxViewMode(e.target.value as "unified" | "split");
-                        }}
-                        className="w-48 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none"
-                      >
-                        <option value="unified">Unified</option>
-                        <option value="split">Split (Categories)</option>
-                      </select>
+                        onChange={(val) => setInboxViewMode(val as "unified" | "split")}
+                        options={[
+                          { value: "unified", label: "Unified" },
+                          { value: "split", label: "Split (Categories)" },
+                        ]}
+                        className="w-48"
+                      />
                     </SettingRow>
                     <ToggleRow
                       label="Reduce motion"
@@ -547,19 +545,20 @@ export function SettingsPage() {
                     />
                     {phishingDetectionEnabled && (
                       <SettingRow label="Detection sensitivity">
-                        <select
+                        <Select
                           value={phishingSensitivity}
-                          onChange={async (e) => {
-                            const val = e.target.value as "low" | "default" | "high";
-                            setPhishingSensitivity(val);
-                            await setSetting("phishing_sensitivity", val);
+                          onChange={async (val) => {
+                            const v = val as "low" | "default" | "high";
+                            setPhishingSensitivity(v);
+                            await setSetting("phishing_sensitivity", v);
                           }}
-                          className="w-48 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none"
-                        >
-                          <option value="low">Low (fewer warnings)</option>
-                          <option value="default">Default</option>
-                          <option value="high">High (more warnings)</option>
-                        </select>
+                          options={[
+                            { value: "low", label: "Low (fewer warnings)" },
+                            { value: "default", label: "Default" },
+                            { value: "high", label: "High (more warnings)" },
+                          ]}
+                          className="w-48"
+                        />
                       </SettingRow>
                     )}
                   </Section>
@@ -593,21 +592,21 @@ export function SettingsPage() {
                       </Button>
                     </div>
                     <SettingRow label="Max cache size">
-                      <select
+                      <Select
                         value={cacheMaxMb}
-                        onChange={async (e) => {
-                          const val = e.target.value;
+                        onChange={async (val) => {
                           setCacheMaxMb(val);
                           await setSetting("attachment_cache_max_mb", val);
                         }}
-                        className="w-48 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none"
-                      >
-                        <option value="100">100 MB</option>
-                        <option value="250">250 MB</option>
-                        <option value="500">500 MB</option>
-                        <option value="1000">1 GB</option>
-                        <option value="2000">2 GB</option>
-                      </select>
+                        options={[
+                          { value: "100", label: "100 MB" },
+                          { value: "250", label: "250 MB" },
+                          { value: "500", label: "500 MB" },
+                          { value: "1000", label: "1 GB" },
+                          { value: "2000", label: "2 GB" },
+                        ]}
+                        className="w-48"
+                      />
                     </SettingRow>
                   </Section>
                 </>
@@ -730,15 +729,16 @@ export function SettingsPage() {
                 <>
                   <Section title="Sending">
                     <SettingRow label="Undo send delay">
-                      <select
+                      <Select
                         value={undoSendDelay}
-                        onChange={(e) => handleUndoDelayChange(e.target.value)}
-                        className="w-48 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none"
-                      >
-                        <option value="5">5 seconds</option>
-                        <option value="10">10 seconds</option>
-                        <option value="30">30 seconds</option>
-                      </select>
+                        onChange={(val) => handleUndoDelayChange(val)}
+                        options={[
+                          { value: "5", label: "5 seconds" },
+                          { value: "10", label: "10 seconds" },
+                          { value: "30", label: "30 seconds" },
+                        ]}
+                        className="w-48"
+                      />
                     </SettingRow>
                     <ToggleRow
                       label="Send and archive"
@@ -750,29 +750,27 @@ export function SettingsPage() {
 
                   <Section title="Behavior">
                     <SettingRow label="Default reply action">
-                      <select
+                      <Select
                         value={defaultReplyMode}
-                        onChange={(e) => {
-                          setDefaultReplyMode(e.target.value as "reply" | "replyAll");
-                        }}
-                        className="w-48 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none"
-                      >
-                        <option value="reply">Reply</option>
-                        <option value="replyAll">Reply All</option>
-                      </select>
+                        onChange={(val) => setDefaultReplyMode(val as "reply" | "replyAll")}
+                        options={[
+                          { value: "reply", label: "Reply" },
+                          { value: "replyAll", label: "Reply All" },
+                        ]}
+                        className="w-48"
+                      />
                     </SettingRow>
                     <SettingRow label="Mark as read">
-                      <select
+                      <Select
                         value={markAsReadBehavior}
-                        onChange={(e) => {
-                          setMarkAsReadBehavior(e.target.value as "instant" | "2s" | "manual");
-                        }}
-                        className="w-48 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none"
-                      >
-                        <option value="instant">Instantly</option>
-                        <option value="2s">After 2 seconds</option>
-                        <option value="manual">Manually</option>
-                      </select>
+                        onChange={(val) => setMarkAsReadBehavior(val as "instant" | "2s" | "manual")}
+                        options={[
+                          { value: "instant", label: "Instantly" },
+                          { value: "2s", label: "After 2 seconds" },
+                          { value: "manual", label: "Manually" },
+                        ]}
+                        className="w-48"
+                      />
                     </SettingRow>
                   </Section>
 
@@ -1009,20 +1007,20 @@ export function SettingsPage() {
 
                   <Section title="Sync Period">
                     <SettingRow label="Sync emails from">
-                      <select
+                      <Select
                         value={syncPeriodDays}
-                        onChange={async (e) => {
-                          const val = e.target.value;
+                        onChange={async (val) => {
                           setSyncPeriodDays(val);
                           await setSetting("sync_period_days", val);
                         }}
-                        className="w-48 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none"
-                      >
-                        <option value="30">Last 30 days</option>
-                        <option value="90">Last 90 days</option>
-                        <option value="180">Last 180 days</option>
-                        <option value="365">Last 1 year</option>
-                      </select>
+                        options={[
+                          { value: "30", label: "Last 30 days" },
+                          { value: "90", label: "Last 90 days" },
+                          { value: "180", label: "Last 180 days" },
+                          { value: "365", label: "Last 1 year" },
+                        ]}
+                        className="w-48"
+                      />
                     </SettingRow>
                     <p className="text-xs text-text-tertiary">
                       Changes apply on the next full resync.
@@ -1044,24 +1042,25 @@ export function SettingsPage() {
                       Choose which AI provider to use for summarization, compose assistance, and smart categorization.
                     </p>
                     <SettingRow label="AI Provider">
-                      <select
+                      <Select
                         value={aiProvider}
-                        onChange={async (e) => {
-                          const val = e.target.value as "claude" | "openai" | "gemini" | "ollama" | "copilot";
-                          setAiProvider(val);
+                        onChange={async (val) => {
+                          const v = val as "claude" | "openai" | "gemini" | "ollama" | "copilot";
+                          setAiProvider(v);
                           setAiTestResult(null);
-                          await setSetting("ai_provider", val);
+                          await setSetting("ai_provider", v);
                           const { clearProviderClients } = await import("@/services/ai/providerManager");
                           clearProviderClients();
                         }}
-                        className="w-48 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none"
-                      >
-                        <option value="claude">Claude (Anthropic)</option>
-                        <option value="openai">OpenAI</option>
-                        <option value="gemini">Gemini (Google)</option>
-                        <option value="ollama">Local AI (Ollama / LMStudio)</option>
-                        <option value="copilot">GitHub Copilot</option>
-                      </select>
+                        options={[
+                          { value: "claude", label: "Claude (Anthropic)" },
+                          { value: "openai", label: "OpenAI" },
+                          { value: "gemini", label: "Gemini (Google)" },
+                          { value: "ollama", label: "Local AI (Ollama / LMStudio)" },
+                          { value: "copilot", label: "GitHub Copilot" },
+                        ]}
+                        className="w-48"
+                      />
                     </SettingRow>
                     <p className="text-xs text-text-tertiary">
                       {aiProvider === "claude" && `Uses ${PROVIDER_MODELS.claude.find((m) => m.id === claudeModel)?.label ?? claudeModel}.`}
@@ -1167,15 +1166,14 @@ export function SettingsPage() {
                           }
                         />
                         <SettingRow label="Model">
-                          <select
+                          <Select
                             value={
                               aiProvider === "claude" ? claudeModel
                               : aiProvider === "openai" ? openaiModel
                               : aiProvider === "copilot" ? copilotModel
                               : geminiModel
                             }
-                            onChange={async (e) => {
-                              const val = e.target.value;
+                            onChange={async (val) => {
                               const modelSettingMap = {
                                 claude: "claude_model",
                                 openai: "openai_model",
@@ -1190,12 +1188,12 @@ export function SettingsPage() {
                               const { clearProviderClients } = await import("@/services/ai/providerManager");
                               clearProviderClients();
                             }}
-                            className="w-48 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none"
-                          >
-                            {PROVIDER_MODELS[aiProvider].map((m) => (
-                              <option key={m.id} value={m.id}>{m.label}</option>
-                            ))}
-                          </select>
+                            options={PROVIDER_MODELS[aiProvider].map((m) => ({
+                              value: m.id,
+                              label: m.label,
+                            }))}
+                            className="w-48"
+                          />
                         </SettingRow>
                         <div className="flex items-center gap-2">
                           <Button

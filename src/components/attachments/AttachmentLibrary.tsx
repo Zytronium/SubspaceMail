@@ -14,6 +14,7 @@ import { AttachmentPreview } from "@/components/email/AttachmentList";
 import { AttachmentGridItem } from "./AttachmentGridItem";
 import { AttachmentListItem } from "./AttachmentListItem";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Select } from "@/components/ui/Select";
 import { isImage, isPdf, isDocument, isSpreadsheet, isArchive } from "@/utils/fileTypeHelpers";
 import { navigateToLabel } from "@/router/navigate";
 
@@ -213,48 +214,39 @@ export function AttachmentLibrary() {
           </div>
 
           {/* Filters */}
-          <select
+          <Select
             value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-            className="text-xs rounded-md border border-border-primary bg-bg-secondary text-text-primary px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-accent"
-          >
-            {TYPE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+            onChange={(val) => setTypeFilter(val as TypeFilter)}
+            options={TYPE_OPTIONS}
+            className="text-xs"
+          />
 
-          <select
+          <Select
             value={senderFilter}
-            onChange={(e) => setSenderFilter(e.target.value)}
-            className="text-xs rounded-md border border-border-primary bg-bg-secondary text-text-primary px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-accent max-w-40"
-          >
-            <option value="all">All senders</option>
-            {senders.map((s) => (
-              <option key={s.from_address} value={s.from_address}>
-                {s.from_name || s.from_address} ({s.count})
-              </option>
-            ))}
-          </select>
+            onChange={(val) => setSenderFilter(val)}
+            options={[
+              { value: "all", label: "All senders" },
+              ...senders.map((s) => ({
+                value: s.from_address,
+                label: `${s.from_name || s.from_address} (${s.count})`,
+              })),
+            ]}
+            className="text-xs max-w-40"
+          />
 
-          <select
+          <Select
             value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value as DateFilter)}
-            className="text-xs rounded-md border border-border-primary bg-bg-secondary text-text-primary px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-accent"
-          >
-            {DATE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+            onChange={(val) => setDateFilter(val as DateFilter)}
+            options={DATE_OPTIONS}
+            className="text-xs"
+          />
 
-          <select
+          <Select
             value={sizeFilter}
-            onChange={(e) => setSizeFilter(e.target.value as SizeFilter)}
-            className="text-xs rounded-md border border-border-primary bg-bg-secondary text-text-primary px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-accent"
-          >
-            {SIZE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+            onChange={(val) => setSizeFilter(val as SizeFilter)}
+            options={SIZE_OPTIONS}
+            className="text-xs"
+          />
 
           {/* View toggle */}
           <div className="flex border border-border-primary rounded-md overflow-hidden">

@@ -1,4 +1,5 @@
 import type { SendAsAlias } from "@/services/db/sendAsAliases";
+import { Select } from "@/components/ui/Select";
 
 interface FromSelectorProps {
   aliases: SendAsAlias[];
@@ -18,22 +19,20 @@ export function FromSelector({ aliases, selectedEmail, onChange }: FromSelectorP
       <span className="text-xs text-text-tertiary w-8 shrink-0">
         From
       </span>
-      <select
+      <Select
         value={selectedEmail}
-        onChange={(e) => {
-          const alias = aliases.find((a) => a.email === e.target.value);
+        onChange={(val) => {
+          const alias = aliases.find((a) => a.email === val);
           if (alias) onChange(alias);
         }}
-        className="flex-1 bg-transparent text-sm text-text-primary outline-none cursor-pointer hover:bg-bg-hover rounded px-1 py-0.5 -ml-1 border-none"
-      >
-        {aliases.map((alias) => (
-          <option key={alias.id} value={alias.email}>
-            {alias.displayName
-              ? `${alias.displayName} <${alias.email}>`
-              : alias.email}
-          </option>
-        ))}
-      </select>
+        options={aliases.map((alias) => ({
+          value: alias.email,
+          label: alias.displayName
+            ? `${alias.displayName} <${alias.email}>`
+            : alias.email,
+        }))}
+        className="flex-1"
+      />
     </div>
   );
 }

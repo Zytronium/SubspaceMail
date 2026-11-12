@@ -13,6 +13,7 @@ import {
   KeyRound,
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
+import { Select } from "@/components/ui/Select";
 import { insertImapAccount, insertOAuthImapAccount } from "@/services/db/accounts";
 import { useAccountStore } from "@/stores/accountStore";
 import {
@@ -106,8 +107,6 @@ interface TestStatus {
 const inputClass =
   "w-full px-3 py-2 bg-bg-secondary border border-border-primary rounded-lg text-sm text-text-primary outline-none focus:border-accent transition-colors";
 const labelClass = "block text-xs font-medium text-text-secondary mb-1";
-const selectClass =
-  "w-full px-3 py-2 bg-bg-secondary border border-border-primary rounded-lg text-sm text-text-primary outline-none focus:border-accent transition-colors appearance-none";
 
 /** Map UI security value ("ssl") to Rust config value ("tls") */
 function mapSecurity(security: string): string {
@@ -692,18 +691,16 @@ export function AddImapAccount({
           <label htmlFor="imap-security" className={labelClass}>
             Security
           </label>
-          <select
-            id="imap-security"
+          <Select
             value={form.imapSecurity}
-            onChange={(e) =>
-              handleImapSecurityChange(e.target.value as SecurityType)
-            }
-            className={selectClass}
-          >
-            <option value="ssl">SSL/TLS</option>
-            <option value="starttls">STARTTLS</option>
-            <option value="none">None</option>
-          </select>
+            onChange={(val) => handleImapSecurityChange(val as SecurityType)}
+            options={[
+              { value: "ssl", label: "SSL/TLS" },
+              { value: "starttls", label: "STARTTLS" },
+              { value: "none", label: "None" },
+            ]}
+            className="w-full"
+          />
         </div>
       </div>
       <div className="flex items-center gap-2">
@@ -767,18 +764,16 @@ export function AddImapAccount({
           <label htmlFor="smtp-security" className={labelClass}>
             Security
           </label>
-          <select
-            id="smtp-security"
+          <Select
             value={form.smtpSecurity}
-            onChange={(e) =>
-              handleSmtpSecurityChange(e.target.value as SecurityType)
-            }
-            className={selectClass}
-          >
-            <option value="ssl">SSL/TLS</option>
-            <option value="starttls">STARTTLS</option>
-            <option value="none">None</option>
-          </select>
+            onChange={(val) => handleSmtpSecurityChange(val as SecurityType)}
+            options={[
+              { value: "ssl", label: "SSL/TLS" },
+              { value: "starttls", label: "STARTTLS" },
+              { value: "none", label: "None" },
+            ]}
+            className="w-full"
+          />
         </div>
       </div>
       {!isOAuth && (

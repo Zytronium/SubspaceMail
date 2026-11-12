@@ -69,6 +69,7 @@
   --glass-highlight: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
 }
 
+
 /* Font scale — set on <html> like .dark */
 html.font-scale-small { font-size: 82%; }
 html.font-scale-default { font-size: 100%; }

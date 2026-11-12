@@ -5,6 +5,7 @@ import { insertTask, getIncompleteTaskCount } from "@/services/db/tasks";
 import type { TaskPriority } from "@/services/db/tasks";
 import type { DbMessage } from "@/services/db/messages";
 import { useTaskStore } from "@/stores/taskStore";
+import { Select } from "@/components/ui/Select";
 
 const PRIORITY_OPTIONS: { value: TaskPriority; label: string; color: string }[] = [
   { value: "none", label: "None", color: "text-text-tertiary" },
@@ -146,15 +147,12 @@ export function AiTaskExtractDialog({
                     <Flag size={11} className="inline mr-1" />
                     Priority
                   </label>
-                  <select
+                  <Select
                     value={priority}
-                    onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                    className="w-full px-3 py-2 bg-bg-tertiary border border-border-primary rounded-lg text-sm text-text-primary outline-none focus:border-accent"
-                  >
-                    {PRIORITY_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => setPriority(val as TaskPriority)}
+                    options={PRIORITY_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }))}
+                    className="w-full"
+                  />
                 </div>
                 <div className="flex-1">
                   <label className="block text-xs font-medium text-text-secondary mb-1.5">

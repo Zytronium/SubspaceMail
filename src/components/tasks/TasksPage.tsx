@@ -21,6 +21,7 @@ import {
 import { handleRecurringTaskCompletion } from "@/services/tasks/taskManager";
 import { TaskItem } from "./TaskItem";
 import { TaskQuickAdd } from "./TaskQuickAdd";
+import { Select } from "@/components/ui/Select";
 
 const PRIORITY_ORDER: Record<TaskPriority, number> = {
   urgent: 0,
@@ -225,40 +226,40 @@ export function TasksPage() {
           </div>
 
           {/* Filters */}
-          <select
+          <Select
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value as TaskFilterStatus)}
-            className="bg-bg-tertiary text-text-primary text-xs px-2.5 py-1.5 rounded-lg border border-border-primary"
-          >
-            <option value="incomplete">Active</option>
-            <option value="all">All</option>
-            <option value="completed">Completed</option>
-          </select>
+            onChange={(val) => setFilterStatus(val as TaskFilterStatus)}
+            options={[
+              { value: "incomplete", label: "Active" },
+              { value: "all", label: "All" },
+              { value: "completed", label: "Completed" },
+            ]}
+          />
 
-          <select
+          <Select
             value={filterPriority}
-            onChange={(e) => setFilterPriority(e.target.value as TaskPriority | "all")}
-            className="bg-bg-tertiary text-text-primary text-xs px-2.5 py-1.5 rounded-lg border border-border-primary"
-          >
-            <option value="all">All priorities</option>
-            <option value="urgent">Urgent</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-            <option value="none">None</option>
-          </select>
+            onChange={(val) => setFilterPriority(val as TaskPriority | "all")}
+            options={[
+              { value: "all", label: "All priorities" },
+              { value: "urgent", label: "Urgent" },
+              { value: "high", label: "High" },
+              { value: "medium", label: "Medium" },
+              { value: "low", label: "Low" },
+              { value: "none", label: "None" },
+            ]}
+          />
 
           {/* Group by */}
-          <select
+          <Select
             value={groupBy}
-            onChange={(e) => setGroupBy(e.target.value as TaskGroupBy)}
-            className="bg-bg-tertiary text-text-primary text-xs px-2.5 py-1.5 rounded-lg border border-border-primary"
-          >
-            <option value="none">No grouping</option>
-            <option value="priority">Group by priority</option>
-            <option value="dueDate">Group by due date</option>
-            <option value="tag">Group by tag</option>
-          </select>
+            onChange={(val) => setGroupBy(val as TaskGroupBy)}
+            options={[
+              { value: "none", label: "No grouping" },
+              { value: "priority", label: "Group by priority" },
+              { value: "dueDate", label: "Group by due date" },
+              { value: "tag", label: "Group by tag" },
+            ]}
+          />
         </div>
       </div>
 

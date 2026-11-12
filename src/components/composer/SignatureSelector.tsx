@@ -5,6 +5,7 @@ import {
   getSignaturesForAccount,
   type DbSignature,
 } from "@/services/db/signatures";
+import { Select } from "@/components/ui/Select";
 
 export function SignatureSelector() {
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
@@ -39,17 +40,14 @@ export function SignatureSelector() {
   };
 
   return (
-    <select
+    <Select
       value={signatureId ?? ""}
-      onChange={(e) => handleChange(e.target.value)}
-      className="text-[0.625rem] bg-bg-tertiary text-text-secondary border border-border-primary rounded px-1.5 py-0.5"
-    >
-      <option value="">No signature</option>
-      {signatures.map((sig) => (
-        <option key={sig.id} value={sig.id}>
-          {sig.name}
-        </option>
-      ))}
-    </select>
+      onChange={handleChange}
+      options={[
+        { value: "", label: "No signature" },
+        ...signatures.map((sig) => ({ value: sig.id, label: sig.name })),
+      ]}
+      className="text-[0.625rem]"
+    />
   );
 }

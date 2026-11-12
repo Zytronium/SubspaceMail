@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Trash2, Pencil } from "lucide-react";
 import { TextField } from "@/components/ui/TextField";
+import { Select } from "@/components/ui/Select";
 import { useAccountStore } from "@/stores/accountStore";
 import { getLabelsForAccount, type DbLabel } from "@/services/db/labels";
 import {
@@ -260,16 +261,15 @@ export function FilterEditor() {
               {labels.length > 0 && (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-text-secondary w-20">Apply label</span>
-                  <select
+                  <Select
                     value={actionLabel}
-                    onChange={(e) => setActionLabel(e.target.value)}
-                    className="flex-1 bg-bg-tertiary text-text-primary text-xs px-2 py-1 rounded border border-border-primary"
-                  >
-                    <option value="">None</option>
-                    {labels.map((l) => (
-                      <option key={l.id} value={l.id}>{l.name}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => setActionLabel(val)}
+                    options={[
+                      { value: "", label: "None" },
+                      ...labels.map((l) => ({ value: l.id, label: l.name })),
+                    ]}
+                    className="flex-1"
+                  />
                 </div>
               )}
               <div className="flex flex-wrap gap-3">
