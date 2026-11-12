@@ -1,6 +1,6 @@
-# Contributing to Velo
+# Contributing to Subspace Mail
 
-Thank you for your interest in contributing to Velo! This guide will help you get started.
+Thank you for your interest in contributing to Subspace Mail! This guide will help you get started.
 
 ## Getting Started
 
@@ -13,8 +13,8 @@ Thank you for your interest in contributing to Velo! This guide will help you ge
 ### Setup
 
 ```bash
-git clone https://github.com/avihaymenahem/velo.git
-cd velo
+git clone https://github.com/Zytronium/SubspaceMail.git
+cd SubspaceMail
 npm install
 npm run tauri dev
 ```
@@ -93,16 +93,16 @@ chore: bump tauri to v2.10
 
 ## Reporting Bugs
 
-Use the [bug report template](https://github.com/avihaymenahem/velo/issues/new?template=bug_report.yml) on GitHub Issues. Include:
+Use the [bug report template](https://github.com/Zytronium/SubspaceMail/issues/new?template=bug_report.yml) on GitHub Issues. Include:
 
 - Steps to reproduce
 - Expected vs. actual behavior
-- OS and Velo version
+- OS and Subspace Mail version
 - Screenshots or logs if applicable
 
 ## Feature Requests
 
-Use the [feature request template](https://github.com/avihaymenahem/velo/issues/new?template=feature_request.yml) on GitHub Issues.
+Use the [feature request template](https://github.com/Zytronium/SubspaceMail/issues/new?template=feature_request.yml) on GitHub Issues.
 
 ## License
 
@@ -154,7 +154,7 @@ These steps guide you through building the Flatpak package locally using `flatpa
     You can now run the application directly.
 
     ```bash
-    flatpak run com.velomail.app
+    flatpak run dev.zytronium.subspacemail
     ```
 
 ### Building and Testing the RPM Locally
@@ -187,7 +187,7 @@ You can build the RPM directly using Tauri's built-in bundler.
 
 ### Pushing to COPR
 
-To publish a new release to a Fedora COPR repository using the `velo.spec` file:
+To publish a new release to a Fedora COPR repository using the `subspacemail.spec` file:
 
 1.  **Install RPM Tools**
 
@@ -198,16 +198,16 @@ To publish a new release to a Fedora COPR repository using the `velo.spec` file:
 
 2.  **Create a Source Tarball and SRPM**
 
-    Create a source tarball that matches the version in `velo.spec`, then build the SRPM.
+    Create a source tarball that matches the version in `subspacemail.spec`, then build the SRPM.
 
     ```bash
-    VERSION=$(grep -oP '(?<=^%global app_version ).*' velo.spec)
-    tar --exclude='.git' --transform "s/^\./velo-${VERSION}/" -czf "velo-${VERSION}.tar.gz" .
+    VERSION=$(grep -oP '(?<=^%global app_version ).*' subspacemail.spec)
+    tar --exclude='.git' --transform "s/^\./subspacemail-${VERSION}/" -czf "subspacemail-${VERSION}.tar.gz" .
     
-    cp "velo-${VERSION}.tar.gz" ~/rpmbuild/SOURCES/
-    cp velo.spec ~/rpmbuild/SPECS/
+    cp "subspacemail-${VERSION}.tar.gz" ~/rpmbuild/SOURCES/
+    cp subspacemail.spec ~/rpmbuild/SPECS/
     
-    rpmbuild -bs ~/rpmbuild/SPECS/velo.spec
+    rpmbuild -bs ~/rpmbuild/SPECS/subspacemail.spec
     ```
 
 3.  **Upload to COPR**
@@ -215,7 +215,7 @@ To publish a new release to a Fedora COPR repository using the `velo.spec` file:
     Submit the generated SRPM to your COPR project.
 
     ```bash
-    copr build your-username/velo ~/rpmbuild/SRPMS/velo-${VERSION}-1.*.src.rpm
+    copr build your-username/subspacemail ~/rpmbuild/SRPMS/subspacemail-${VERSION}-1.*.src.rpm
     ```
     
     *Note: Because our RPM build runs `npm ci` and Cargo, ensure **"Enable network in buildroot"** is turned on in your COPR project settings.*

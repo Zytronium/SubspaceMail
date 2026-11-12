@@ -39,11 +39,11 @@
   <path d="M96 88H112V104H96V88Z" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Logo text -->
-  <text x="140" y="108" font-family="Inter, -apple-system, sans-serif" font-size="32" font-weight="700" fill="#E8E8F0" letter-spacing="-0.5">Velo</text>
+  <text x="140" y="108" font-family="Inter, -apple-system, sans-serif" font-size="32" font-weight="700" fill="#E8E8F0" letter-spacing="-0.5">Subspace Mail</text>
 
   <!-- Main headline -->
   <text x="80" y="280" font-family="Inter, -apple-system, sans-serif" font-size="72" font-weight="800" fill="#E8E8F0" letter-spacing="-2">Email at the</text>
-  <text x="80" y="365" font-family="Inter, -apple-system, sans-serif" font-size="72" font-weight="800" fill="url(#textGrad)" letter-spacing="-2">speed of thought</text>
+  <text x="80" y="365" font-family="Inter, -apple-system, sans-serif" font-size="72" font-weight="800" fill="url(#textGrad)" letter-spacing="-2">speed of subspace</text>
 
   <!-- Subheadline -->
   <text x="80" y="430" font-family="Inter, -apple-system, sans-serif" font-size="22" font-weight="400" fill="#9898B0">AI-powered, keyboard-first, privacy-focused desktop email.</text>
@@ -57,7 +57,7 @@
   </text>
 
   <!-- Domain -->
-  <text x="80" y="570" font-family="Inter, -apple-system, sans-serif" font-size="18" font-weight="500" fill="#6366F1">velomail.app</text>
+  <text x="80" y="570" font-family="Inter, -apple-system, sans-serif" font-size="18" font-weight="500" fill="#6366F1">subspace.zytronium.dev</text>
 
   <!-- Decorative inbox mockup hint (right side) -->
   <rect x="750" y="140" width="370" height="350" rx="16" fill="#12121C" stroke="#ffffff0f" stroke-width="1"/>

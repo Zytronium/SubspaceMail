@@ -133,8 +133,8 @@ export function AttachmentLibrary() {
     const handler = () => {
       if (accountId) loadData(accountId);
     };
-    window.addEventListener("velo-sync-done", handler);
-    return () => window.removeEventListener("velo-sync-done", handler);
+    window.addEventListener("subspacemail-sync-done", handler);
+    return () => window.removeEventListener("subspacemail-sync-done", handler);
   }, [accountId, loadData]);
 
   const filtered = useMemo(() => {

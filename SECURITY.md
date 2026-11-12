@@ -7,13 +7,14 @@
 | Latest release | Yes |
 | Older releases | No |
 
-We only provide security fixes for the latest release. Please keep Velo up to date.
+We only provide security fixes for the latest release. Please keep Subspace Mail up to date.
 
 ## Reporting a Vulnerability
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-Instead, please report them via email to **security@velomail.app** (or by opening a [private security advisory](https://github.com/avihaymenahem/velo/security/advisories/new) on GitHub).
+<!-- FLAG: Velo website/email link - formerly security@velomail.app; use GitHub Security Advisories for Subspace Mail -->
+Please report them by opening a [private security advisory](https://github.com/Zytronium/SubspaceMail/security/advisories/new) on GitHub.
 
 Include as much of the following as possible:
 
@@ -28,13 +29,13 @@ You should receive an acknowledgment within **48 hours**. We will work with you 
 
 ### Local-First Architecture
 
-Velo is a desktop application. Your emails, tokens, and settings are stored locally in a SQLite database on your machine. There are no Velo-operated backend servers.
+Subspace Mail is a desktop application. Your emails, tokens, and settings are stored locally in a SQLite database on your machine. There are no Subspace Mail-operated backend servers.
 
 ### Authentication & Credentials
 
 - **Gmail**: OAuth 2.0 with PKCE -- no client secret stored. Tokens are encrypted with AES-256-GCM before being saved to the local database.
 - **IMAP/SMTP**: Passwords and app passwords are encrypted with AES-256-GCM in the local SQLite database.
-- **AI API keys**: Stored in the local SQLite settings table. Keys are sent directly to the respective provider (Anthropic, OpenAI, Google) over HTTPS -- never to any Velo server.
+- **AI API keys**: Stored in the local SQLite settings table. Keys are sent directly to the respective provider (Anthropic, OpenAI, Google) over HTTPS -- never to any Subspace Mail server.
 
 ### Email Rendering
 
@@ -70,7 +71,7 @@ The following are **out of scope**:
 
 - Vulnerabilities requiring physical access to the user's machine (local SQLite is not encrypted at rest by design -- the OS protects user files)
 - Denial of service against the local application
-- Issues in third-party dependencies with no demonstrated impact on Velo
+- Issues in third-party dependencies with no demonstrated impact on Subspace Mail
 - Social engineering attacks
 
 ## Disclosure Policy

@@ -459,9 +459,9 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => loadThreads(), 500);
     };
-    window.addEventListener("velo-sync-done", handler);
+    window.addEventListener("subspacemail-sync-done", handler);
     return () => {
-      window.removeEventListener("velo-sync-done", handler);
+      window.removeEventListener("subspacemail-sync-done", handler);
       if (timer) clearTimeout(timer);
     };
   }, [loadThreads, activeAccountId, activeLabel]);
@@ -720,7 +720,7 @@ function EmptyStateForContext({
     return <EmptyState icon={Filter} title={`No ${readFilter} emails`} subtitle="Try changing the filter" />;
   }
   if (!activeAccountId) {
-    return <EmptyState illustration={NoAccountIllustration} title="No account connected" subtitle="Add a Gmail account to get started" />;
+    return <EmptyState illustration={NoAccountIllustration} title="No account connected" subtitle="Add an email account to get started" />;
   }
 
   switch (activeLabel) {

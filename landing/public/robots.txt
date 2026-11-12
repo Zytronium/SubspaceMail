@@ -1,4 +1,5 @@
 User-agent: *
 Allow: /
 
+# FLAG: Velo website link - pending Subspace Mail website
 Sitemap: https://velomail.app/sitemap.xml
