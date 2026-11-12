@@ -8,8 +8,7 @@
   <description>
     <p>Subspace Mail is a fast and beautiful desktop email client, built with modern web technologies.</p>
   </description>
-  <!-- FLAG: Velo website link - pending Subspace Mail website; using GitHub repo for now -->
-  <url type="homepage">https://github.com/Zytronium/SubspaceMail</url>
+  <url type="homepage">https://subspace.zytronium.dev</url>
   <url type="bugtracker">https://github.com/Zytronium/SubspaceMail/issues</url>
   <launchable type="desktop-id">dev.zytronium.subspacemail.desktop</launchable>
   <releases>
