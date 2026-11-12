@@ -1,19 +1,21 @@
 <p align="center">
-  <img src="assets/icon.png?v1" alt="Velo" width="200" height="200" style="border-radius: 24px;" />
+  <img src="assets/icon.png" alt="Subspace Mail" width="200" height="200" style="border-radius: 24px;" />
 </p>
 
-<h1 align="center">Velo</h1>
+<h1 align="center">Subspace Mail</h1>
 
 <p align="center">
-  <strong>Email at the speed of thought.</strong>
-</p>
-
-<p align="center">
-  A blazing-fast, keyboard-first desktop email client built with Tauri, React, and Rust.<br />
-  Local-first. Privacy-focused. AI-powered.
+  <strong>Email at the speed of subspace.</strong>
 </p>
 
 <p align="center">
+  A fast, keyboard-first desktop email client built with Tauri, React, and Rust.<br />
+  Local-first. Privacy-focused. AI-optional.<br />
+  A semi-maintained fork of <a href="https://github.com/avihaymenahem/velo">Velo</a> mail.
+</p>
+
+<p align="center">
+  <a href="#about-this-fork">About</a>&nbsp;&nbsp;&bull;&nbsp;&nbsp;
   <a href="#features">Features</a>&nbsp;&nbsp;&bull;&nbsp;&nbsp;
   <a href="#installation">Installation</a>&nbsp;&nbsp;&bull;&nbsp;&nbsp;
   <a href="docs/keyboard-shortcuts.md">Shortcuts</a>&nbsp;&nbsp;&bull;&nbsp;&nbsp;
@@ -25,20 +27,37 @@
 ---
 
 <p align="center">
-  <img width="1920" height="1032" alt="Screenshot 2026-02-17 223320" src="https://github.com/user-attachments/assets/dd096d15-4c1e-438c-99f9-c38b50a8a437" />
+  <img width="1920" height="1032" alt="Subspace Mail screenshot" src="https://github.com/user-attachments/assets/dd096d15-4c1e-438c-99f9-c38b50a8a437" />
 </p>
 
 ---
 
-## Why Velo?
+## About this fork
 
-Most email clients are slow, bloated, or send your data to someone else's server. Velo is different:
+Velo has one of the best email client UIs out there and a lot of potential, but upstream development appears to have stopped, leaving many bugs and open issues (including security reports) unaddressed.
 
-- **Local-first** -- Your emails live in a local SQLite database. No middleman servers. Read your mail offline.
-- **Keyboard-driven** -- Superhuman-inspired shortcuts let you fly through your inbox without touching the mouse.
-- **AI-enhanced** -- Summarize threads, generate replies, and search your inbox in natural language -- with your choice of AI provider.
-- **Native performance** -- Rust backend via Tauri v2. Small binary, low memory, instant startup.
-- **Private by default** -- Remote images blocked, HTML sanitized, emails rendered in sandboxed iframes. Your data stays on your machine.
+Subspace Mail picks up where it left off. The goals:
+
+- **Fix what's broken**: rendering problems, loading failures, sending quirks, and other long-standing bugs.
+- **Harden security**: review and merge important security fixes that were left sitting in upstream's queue.
+- **Polish the experience**: keep the UI that makes Velo great and smooth out the rough edges around it.
+- **Stay maintained**: keep dependencies, builds, and releases alive for the foreseeable future.
+
+It's mainly a personal project built for my own daily use, but I update it with other people in mind. If it works for you too, great. Issues and pull requests are welcome.
+
+Subspace Mail is based on Velo by [Avihay Menahem](https://github.com/avihaymenahem), released under the Apache-2.0 license. Many thanks for the foundation.
+
+---
+
+## Why Subspace Mail?
+
+Most email clients are slow, bloated, or send your data to someone else's server. Subspace Mail is different:
+
+- **Local-first**: Your emails live in a local SQLite database. No middleman servers. Read your mail offline.
+- **Keyboard-driven**: Superhuman-inspired shortcuts let you fly through your inbox without touching the mouse.
+- **AI-enhanced (optional)**: Summarize threads, generate replies, and search your inbox in natural language, with your choice of AI provider.
+- **Native performance**: Rust backend via Tauri v2. Small binary, low memory, instant startup.
+- **Private by default**: Remote images blocked, HTML sanitized, emails rendered in sandboxed iframes. Your data stays on your machine.
 
 ---
 
@@ -71,12 +90,12 @@ Most email clients are slow, bloated, or send your data to someone else's server
 - One-click unsubscribe (RFC 8058) and subscription manager
 - Newsletter bundling with delivery schedules
 - Smart folders / saved searches with dynamic query tokens
-- Quick steps -- custom action chains for batch thread processing
+- Quick steps: custom action chains for batch thread processing
 - Follow-up reminders when you haven't received a reply
 
 ### AI
 
-Three providers with selectable models -- choose one or mix and match:
+Three providers with selectable models. Choose one or mix and match, or skip AI entirely:
 
 | Provider | Models |
 |----------|--------|
@@ -88,7 +107,7 @@ Thread summaries, smart reply suggestions, AI compose & reply, text transform (i
 
 ### Calendar
 
-Google Calendar sync with month, week, and day views. Create events without leaving Velo.
+Google Calendar sync with month, week, and day views. Create events without leaving the app.
 
 ### UI & Design
 
@@ -101,7 +120,7 @@ Google Calendar sync with month, week, and day views. Create events without leav
 
 ### Privacy & Security
 
-- OAuth PKCE for Gmail -- no client secret, no backend servers
+- OAuth PKCE for Gmail: no client secret, no backend servers
 - Encrypted password/app-password storage for IMAP accounts (AES-256-GCM)
 - Remote image blocking with per-sender allowlist
 - Phishing link detection with 10 heuristic scoring rules
@@ -121,32 +140,32 @@ Google Calendar sync with month, week, and day views. Create events without leav
 
 Download the latest release for your platform:
 
-**[Download Velo](https://github.com/avihaymenahem/velo/releases/latest)** -- Windows `.msi` / `.exe` &nbsp;&bull;&nbsp; macOS `.dmg` &nbsp;&bull;&nbsp; Linux `.deb` / `.AppImage`
+**[Download Subspace Mail](https://github.com/Zytronium/SubspaceMail/releases/latest)**: Windows `.msi` / `.exe` &nbsp;&bull;&nbsp; macOS `.dmg` &nbsp;&bull;&nbsp; Linux `.deb` / `.AppImage`
 
-No build tools or programming knowledge required -- just download, install, and run.
+No build tools or programming knowledge required. Just download, install, and run.
 
 ### Account setup
 
-**Gmail:** Create OAuth credentials in [Google Cloud Console](https://console.cloud.google.com/) (enable Gmail API + Calendar API), then enter your Client ID in Velo's Settings. No client secret needed (PKCE).
+**Gmail:** Create OAuth credentials in [Google Cloud Console](https://console.cloud.google.com/) (enable Gmail API + Calendar API), then enter your Client ID in Subspace Mail's Settings. No client secret needed (PKCE).
 
-**IMAP/SMTP:** Click "Add IMAP Account" in the account switcher. Enter your email and password -- Velo auto-discovers server settings for popular providers (Outlook, Yahoo, iCloud, Fastmail, etc.). For other providers, enter IMAP/SMTP server details manually. No Google Cloud project needed.
+**IMAP/SMTP:** Click "Add IMAP Account" in the account switcher. Enter your email and password; Subspace Mail auto-discovers server settings for popular providers (Outlook, Yahoo, iCloud, Fastmail, etc.). For other providers, enter IMAP/SMTP server details manually. No Google Cloud project needed.
 
 **AI (optional):** Add an API key for [Anthropic](https://console.anthropic.com/), [OpenAI](https://platform.openai.com/), or [Google Gemini](https://aistudio.google.com/) in Settings. Then select which model to use for each provider.
 
 ### Building from source
 
-For developers who want to build Velo themselves or contribute:
+For developers who want to build Subspace Mail themselves or contribute:
 
 ```bash
-git clone https://github.com/avihaymenahem/velo.git
-cd velo
+git clone https://github.com/Zytronium/SubspaceMail.git
+cd SubspaceMail
 npm install
 npm run tauri dev
 ```
 
 **Prerequisites:** [Node.js](https://nodejs.org/) v18+, [Rust](https://www.rust-lang.org/tools/install), [Tauri v2 deps](https://v2.tauri.app/start/prerequisites/)
 
-See [Development Guide](docs/development.md) for all commands, testing, and build instructions.
+See the [Development Guide](docs/development.md) for all commands, testing, and build instructions.
 
 ---
 
@@ -177,13 +196,22 @@ npm run tauri build
 
 ---
 
+## Contributing
+
+Bug reports, fixes, and polish are all welcome. Please check [CONTRIBUTING.md](CONTRIBUTING.md) and open an [issue](https://github.com/Zytronium/SubspaceMail/issues) before starting anything large. Security issues are a priority; please report them privately rather than in a public issue.
+
+---
+
 ## License
 
 [Apache-2.0](LICENSE)
+
+Subspace Mail is a fork of [Velo](https://github.com/avihaymenahem/velo) by Avihay Menahem, used and modified under the same license.
 
 ---
 
 <p align="center">
   Built with Rust and React.<br />
-  Made by <a href="https://github.com/avihaymenahem">Avihay</a>.
+  Forked and maintained by <a href="https://github.com/Zytronium">Zytronium</a>.<br />
+  Originally created by <a href="https://github.com/avihaymenahem">Avihay</a>.
 </p>
