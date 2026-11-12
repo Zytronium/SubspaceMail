@@ -157,15 +157,15 @@ export default function App() {
       const detail = (e as CustomEvent<{ threadIds: string[] }>).detail;
       setMoveToFolderState({ open: true, threadIds: detail.threadIds });
     };
-    window.addEventListener("velo-toggle-command-palette", togglePalette);
-    window.addEventListener("velo-toggle-shortcuts-help", toggleHelp);
-    window.addEventListener("velo-toggle-ask-inbox", toggleAskInbox);
-    window.addEventListener("velo-move-to-folder", handleMoveToFolder);
+    window.addEventListener("subspacemail-toggle-command-palette", togglePalette);
+    window.addEventListener("subspacemail-toggle-shortcuts-help", toggleHelp);
+    window.addEventListener("subspacemail-toggle-ask-inbox", toggleAskInbox);
+    window.addEventListener("subspacemail-move-to-folder", handleMoveToFolder);
     return () => {
-      window.removeEventListener("velo-toggle-command-palette", togglePalette);
-      window.removeEventListener("velo-toggle-shortcuts-help", toggleHelp);
-      window.removeEventListener("velo-toggle-ask-inbox", toggleAskInbox);
-      window.removeEventListener("velo-move-to-folder", handleMoveToFolder);
+      window.removeEventListener("subspacemail-toggle-command-palette", togglePalette);
+      window.removeEventListener("subspacemail-toggle-shortcuts-help", toggleHelp);
+      window.removeEventListener("subspacemail-toggle-ask-inbox", toggleAskInbox);
+      window.removeEventListener("subspacemail-move-to-folder", handleMoveToFolder);
     };
   }, []);
 
@@ -401,7 +401,7 @@ export default function App() {
       } else if (status === "done") {
         setSyncStatus("Sync complete");
         setTimeout(() => setSyncStatus(null), 2_000);
-        window.dispatchEvent(new Event("velo-sync-done"));
+        window.dispatchEvent(new Event("subspacemail-sync-done"));
         updateBadgeCount();
 
         // Backfill uncategorized threads after first successful sync
@@ -414,7 +414,7 @@ export default function App() {
       } else if (status === "error") {
         setSyncStatus(error ? `Sync failed: ${formatSyncError(error)}` : "Sync failed");
         // Still dispatch sync-done so the UI refreshes with any partially stored data
-        window.dispatchEvent(new Event("velo-sync-done"));
+        window.dispatchEvent(new Event("subspacemail-sync-done"));
         // Auto-clear the error after 8 seconds
         setTimeout(() => setSyncStatus(null), 8_000);
       }
