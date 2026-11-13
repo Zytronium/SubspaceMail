@@ -99,8 +99,9 @@ async function tryWellKnownDiscovery(domain: string): Promise<string | null> {
       redirect: "manual",
     });
 
-    // RFC 6764: server should respond with 301/302 redirect to the CalDAV endpoint
-    if (response.status === 301 || response.status === 302) {
+    // RFC 6764: server should respond with 3xx redirect to the CalDAV endpoint
+    // Common status codes: 301 (Moved Permanently), 302 (Found), 307 (Temporary Redirect), 308 (Permanent Redirect)
+    if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("Location");
       if (location) {
         // Handle relative URLs
@@ -145,21 +146,14 @@ export async function testCalDavConnection(
   password: string,
 ): Promise<{ success: boolean; message: string; calendarCount?: number }> {
   try {
-    const { DAVClient } = await import("tsdav");
-    const client = new DAVClient({
-      serverUrl: url,
-      credentials: { username, password },
-      authMethod: "Basic",
-      defaultAccountType: "caldav",
-    });
-
-    await client.login();
-    const calendars = await client.fetchCalendars();
+    const { invoke } = await import("@tauri-apps/api/core");
+    const config = { server_url: url, username, password };
+    const count: number = await invoke("caldav_test_connection", { config });
 
     return {
       success: true,
-      message: `Connected — found ${calendars.length} calendar${calendars.length !== 1 ? "s" : ""}`,
-      calendarCount: calendars.length,
+      message: `Connected — found ${count} calendar${count !== 1 ? "s" : ""}`,
+      calendarCount: count,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Connection failed";

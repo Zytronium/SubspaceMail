@@ -24,9 +24,27 @@ export function CalDavSettings({ account, onSaved }: CalDavSettingsProps) {
   useEffect(() => {
     if (!account.caldav_url && !discovered) {
       setDiscovered(true);
-      discoverCalDavSettings(account.email).then((result) => {
+      discoverCalDavSettings(account.email).then(async (result) => {
         if (result.caldavUrl) {
           setCaldavUrl(result.caldavUrl);
+          // Auto-save CalDAV settings if the account has IMAP credentials
+          // so the calendar works immediately without manual configuration
+          const password = account.imap_password || account.caldav_password;
+          if (password) {
+            setPassword(password);
+            try {
+              await updateAccountCalDav(account.id, {
+                caldavUrl: result.caldavUrl,
+                caldavUsername: account.imap_username ?? account.email,
+                caldavPassword: password,
+                calendarProvider: "caldav",
+              });
+              removeCalendarProvider(account.id);
+              onSaved();
+            } catch (err) {
+              console.error("Failed to auto-save CalDAV settings:", err);
+            }
+          }
         }
       });
     }

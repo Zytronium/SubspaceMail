@@ -33,7 +33,8 @@ export function EventDetailModal({ event, calendars, accountId, onClose, onUpdat
     setSaving(true);
     try {
       const provider = await getCalendarProvider(accountId);
-      const calendarRemoteId = calendar?.remote_id ?? "primary";
+      const calendarRemoteId = calendar?.remote_id ?? (provider.type === "google_api" ? "primary" : null);
+      if (!calendarRemoteId) throw new Error("No calendar available for this event");
       const remoteEventId = event.remote_event_id ?? event.google_event_id;
 
       await provider.updateEvent(calendarRemoteId, remoteEventId, {
@@ -56,7 +57,8 @@ export function EventDetailModal({ event, calendars, accountId, onClose, onUpdat
     setDeleting(true);
     try {
       const provider = await getCalendarProvider(accountId);
-      const calendarRemoteId = calendar?.remote_id ?? "primary";
+      const calendarRemoteId = calendar?.remote_id ?? (provider.type === "google_api" ? "primary" : null);
+      if (!calendarRemoteId) throw new Error("No calendar available for this event");
       const remoteEventId = event.remote_event_id ?? event.google_event_id;
 
       await provider.deleteEvent(calendarRemoteId, remoteEventId, event.etag ?? undefined);

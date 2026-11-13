@@ -1,7 +1,7 @@
 import { discoverCalDavSettings, testCalDavConnection } from "./autoDiscovery";
 
-vi.mock("tsdav", () => ({
-  DAVClient: vi.fn(),
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
 }));
 
 describe("discoverCalDavSettings", () => {
@@ -83,18 +83,8 @@ describe("discoverCalDavSettings", () => {
 
 describe("testCalDavConnection", () => {
   it("returns success with calendar count on successful connection", async () => {
-    const { DAVClient } = await import("tsdav");
-    const mockLogin = vi.fn().mockResolvedValue(undefined);
-    const mockFetchCalendars = vi
-      .fn()
-      .mockResolvedValue([{ displayName: "Personal" }, { displayName: "Work" }]);
-
-    vi.mocked(DAVClient).mockImplementation(function () {
-      return {
-        login: mockLogin,
-        fetchCalendars: mockFetchCalendars,
-      } as unknown as InstanceType<typeof DAVClient>;
-    });
+    const { invoke } = await import("@tauri-apps/api/core");
+    (invoke as ReturnType<typeof vi.fn>).mockResolvedValueOnce(2);
 
     const result = await testCalDavConnection(
       "https://caldav.example.com",
@@ -109,13 +99,8 @@ describe("testCalDavConnection", () => {
   });
 
   it("returns failure with error message on failed connection", async () => {
-    const { DAVClient } = await import("tsdav");
-
-    vi.mocked(DAVClient).mockImplementation(function () {
-      return {
-        login: vi.fn().mockRejectedValue(new Error("Invalid credentials")),
-      } as unknown as InstanceType<typeof DAVClient>;
-    });
+    const { invoke } = await import("@tauri-apps/api/core");
+    (invoke as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("Invalid credentials"));
 
     const result = await testCalDavConnection(
       "https://caldav.example.com",

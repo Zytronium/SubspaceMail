@@ -5475,6 +5475,7 @@ dependencies = [
  "log",
  "mail-parser",
  "native-tls",
+ "percent-encoding",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
@@ -5499,6 +5500,7 @@ dependencies = [
  "tokio-native-tls",
  "tray-item",
  "utf7-imap",
+ "uuid",
  "windows 0.58.0",
 ]
 

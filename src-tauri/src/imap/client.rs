@@ -257,7 +257,7 @@ pub async fn fetch_messages(
     // Some IMAP servers return empty streams for UID FETCH despite valid UIDs.
     let fetches = tokio::time::timeout(IMAP_FETCH_TIMEOUT, async {
         let stream = session
-            .uid_fetch(uid_range, "UID FLAGS INTERNALDATE RFC822")
+            .uid_fetch(uid_range, "UID FLAGS INTERNALDATE BODY.PEEK[]")
             .await
             .map_err(|e| format!("UID FETCH {folder} uids={uid_range} failed: {e}"))?;
         Ok::<_, String>(stream.collect::<Vec<_>>().await)
@@ -347,7 +347,7 @@ pub async fn fetch_message_body(
     let uid_str = uid.to_string();
     let fetches: Vec<_> = tokio::time::timeout(IMAP_FETCH_TIMEOUT, async {
         let stream = session
-            .uid_fetch(&uid_str, "UID FLAGS RFC822")
+            .uid_fetch(&uid_str, "UID FLAGS BODY.PEEK[]")
             .await
             .map_err(|e| format!("UID FETCH failed: {e}"))?;
         Ok::<_, String>(stream.collect::<Vec<_>>().await)
@@ -592,7 +592,7 @@ pub async fn fetch_attachment(
     let uid_str = uid.to_string();
     let fetches: Vec<_> = tokio::time::timeout(IMAP_FETCH_TIMEOUT, async {
         let stream = session
-            .uid_fetch(&uid_str, "RFC822")
+            .uid_fetch(&uid_str, "BODY.PEEK[]")
             .await
             .map_err(|e| format!("UID FETCH attachment failed: {e}"))?;
         Ok::<_, String>(stream.collect::<Vec<_>>().await)
@@ -665,7 +665,7 @@ pub async fn fetch_raw_message(
     let uid_str = uid.to_string();
     let fetches: Vec<_> = tokio::time::timeout(IMAP_FETCH_TIMEOUT, async {
         let stream = session
-            .uid_fetch(&uid_str, "RFC822")
+            .uid_fetch(&uid_str, "BODY.PEEK[]")
             .await
             .map_err(|e| format!("UID FETCH failed: {e}"))?;
         Ok::<_, String>(stream.collect::<Vec<_>>().await)
@@ -874,7 +874,7 @@ pub async fn sync_folder(
 
         let fetches = tokio::time::timeout(IMAP_FETCH_TIMEOUT, async {
             let stream = session
-                .uid_fetch(&uid_set, "UID FLAGS INTERNALDATE RFC822")
+                .uid_fetch(&uid_set, "UID FLAGS INTERNALDATE BODY.PEEK[]")
                 .await
                 .map_err(|e| format!("UID FETCH {folder} uids={uid_set} failed: {e}"))?;
             Ok::<_, String>(stream.collect::<Vec<_>>().await)

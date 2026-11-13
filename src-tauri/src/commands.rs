@@ -1,3 +1,5 @@
+use crate::caldav::client as caldav_client;
+use crate::caldav::types::{CalDavCalendar, CalDavConfig, CalDavEvent};
 use crate::imap::client as imap_client;
 use crate::imap::types::{
     DeltaCheckRequest, DeltaCheckResult, ImapConfig, ImapFetchResult, ImapFolder,
@@ -326,4 +328,54 @@ pub async fn smtp_send_email(
 #[tauri::command]
 pub async fn smtp_test_connection(config: SmtpConfig) -> Result<SmtpSendResult, String> {
     smtp_client::test_connection(&config).await
+}
+
+// ---------- CalDAV commands ----------
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn caldav_test_connection(config: CalDavConfig) -> Result<usize, String> {
+    caldav_client::test_connection(&config).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn caldav_list_calendars(config: CalDavConfig) -> Result<Vec<CalDavCalendar>, String> {
+    caldav_client::list_calendars(&config).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn caldav_fetch_events(
+    config: CalDavConfig,
+    calendar_url: String,
+    time_start: String,
+    time_end: String,
+) -> Result<Vec<CalDavEvent>, String> {
+    caldav_client::fetch_events(&config, &calendar_url, &time_start, &time_end).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn caldav_create_event(
+    config: CalDavConfig,
+    calendar_url: String,
+    ical_data: String,
+) -> Result<CalDavEvent, String> {
+    caldav_client::create_event(&config, &calendar_url, &ical_data).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn caldav_update_event(
+    config: CalDavConfig,
+    event_url: String,
+    ical_data: String,
+    etag: Option<String>,
+) -> Result<(), String> {
+    caldav_client::update_event(&config, &event_url, &ical_data, etag.as_deref()).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn caldav_delete_event(
+    config: CalDavConfig,
+    event_url: String,
+    etag: Option<String>,
+) -> Result<(), String> {
+    caldav_client::delete_event(&config, &event_url, etag.as_deref()).await
 }

@@ -6,6 +6,7 @@ use tauri::{
 use tauri::{Emitter, Manager};
 use tauri_plugin_autostart::MacosLauncher;
 
+mod caldav;
 mod commands;
 mod imap;
 mod oauth;
@@ -112,6 +113,12 @@ pub fn run() {
             commands::imap_delta_check,
             commands::smtp_send_email,
             commands::smtp_test_connection,
+            commands::caldav_test_connection,
+            commands::caldav_list_calendars,
+            commands::caldav_fetch_events,
+            commands::caldav_create_event,
+            commands::caldav_update_event,
+            commands::caldav_delete_event,
         ])
         .setup(|app| {
             {

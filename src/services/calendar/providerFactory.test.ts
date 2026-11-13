@@ -86,8 +86,21 @@ describe("providerFactory", () => {
       expect(provider.accountId).toBe(account.id);
     });
 
-    it("throws error for IMAP accounts without calendar configured", async () => {
+    it("returns CalDAVProvider for IMAP accounts with credentials (fallback)", async () => {
       const account = createMockImapAccount();
+      mockGetAccount.mockResolvedValue(account);
+
+      const provider = await getCalendarProvider(account.id);
+
+      expect(provider.type).toBe("caldav");
+      expect(provider.accountId).toBe(account.id);
+    });
+
+    it("throws error for accounts without any calendar or IMAP credentials", async () => {
+      const account = createMockImapAccount({
+        imap_host: null,
+        imap_password: null,
+      });
       mockGetAccount.mockResolvedValue(account);
 
       await expect(getCalendarProvider(account.id)).rejects.toThrow(
@@ -185,8 +198,18 @@ describe("providerFactory", () => {
       expect(await hasCalendarSupport(account.id)).toBe(true);
     });
 
-    it("returns false for plain IMAP accounts without calendar", async () => {
+    it("returns true for IMAP accounts with credentials (fallback)", async () => {
       const account = createMockImapAccount();
+      mockGetAccount.mockResolvedValue(account);
+
+      expect(await hasCalendarSupport(account.id)).toBe(true);
+    });
+
+    it("returns false for accounts without any calendar or IMAP credentials", async () => {
+      const account = createMockImapAccount({
+        imap_host: null,
+        imap_password: null,
+      });
       mockGetAccount.mockResolvedValue(account);
 
       expect(await hasCalendarSupport(account.id)).toBe(false);

@@ -22,8 +22,12 @@ export async function getCalendarProvider(accountId: string): Promise<CalendarPr
   if (account.provider === "caldav") {
     provider = new CalDAVProvider(accountId);
   }
-  // IMAP account with CalDAV configured
-  else if (account.calendar_provider === "caldav" && account.caldav_url) {
+  // IMAP account with CalDAV configured, or IMAP account that can fall back to IMAP credentials
+  else if (account.calendar_provider === "caldav" || (account.caldav_url && account.caldav_password)) {
+    provider = new CalDAVProvider(accountId);
+  }
+  // IMAP account without explicit CalDAV config — try to use IMAP credentials as fallback
+  else if (account.imap_host && account.imap_password) {
     provider = new CalDAVProvider(accountId);
   }
   // Gmail API account
@@ -50,7 +54,9 @@ export async function hasCalendarSupport(accountId: string): Promise<boolean> {
 
   if (account.provider === "caldav") return true;
   if (account.provider === "gmail_api") return true;
-  if (account.calendar_provider === "caldav" && account.caldav_url) return true;
+  if (account.calendar_provider === "caldav") return true;
+  // IMAP account with credentials can use CalDAV fallback
+  if (account.imap_host && account.imap_password) return true;
   return false;
 }
 

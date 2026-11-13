@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAccountStore } from "@/stores/accountStore";
 import { getCalendarEventsInRangeMulti, upsertCalendarEvent, type DbCalendarEvent } from "@/services/db/calendarEvents";
-import { getVisibleCalendars, getCalendarsForAccount, upsertCalendar, type DbCalendar } from "@/services/db/calendars";
+import { getVisibleCalendars, getCalendarsForAccount, upsertCalendar, deduplicateCalendars, type DbCalendar } from "@/services/db/calendars";
+import { updateAccountCalDav, getAccount } from "@/services/db/accounts";
 import { getCalendarProvider, hasCalendarSupport } from "@/services/calendar/providerFactory";
+import { discoverCalDavSettings } from "@/services/calendar/autoDiscovery";
 import type { CalendarEventData, CreateEventInput } from "@/services/calendar/types";
 import { CalendarToolbar, type CalendarView } from "./CalendarToolbar";
 import { MonthView } from "./MonthView";
@@ -63,7 +65,7 @@ export function CalendarPage() {
       setHasCalendar(supported);
       if (!supported) return;
 
-      const cals = await getCalendarsForAccount(activeAccountId);
+      const cals = await getVisibleCalendars(activeAccountId);
       setCalendars(cals);
     } catch {
       // ignore
@@ -79,10 +81,11 @@ export function CalendarPage() {
     const endTs = Math.floor(end.getTime() / 1000);
 
     // Load from local cache first
+    let cached: DbCalendarEvent[] = [];
     try {
       const visibleCals = await getVisibleCalendars(activeAccountId);
       const calendarIds = visibleCals.map((c) => c.id);
-      const cached = await getCalendarEventsInRangeMulti(activeAccountId, calendarIds, startTs, endTs);
+      cached = await getCalendarEventsInRangeMulti(activeAccountId, calendarIds, startTs, endTs);
       setEvents(cached);
     } catch {
       // ignore cache errors
@@ -99,34 +102,112 @@ export function CalendarPage() {
       const provider = await getCalendarProvider(activeAccountId);
 
       // Discover/update calendars
-      const providerCalendars = await provider.listCalendars();
-      for (const cal of providerCalendars) {
-        await upsertCalendar({
-          accountId: activeAccountId,
-          provider: provider.type,
-          remoteId: cal.remoteId,
-          displayName: cal.displayName,
-          color: cal.color,
-          isPrimary: cal.isPrimary,
-        });
+      let providerCalendars = await provider.listCalendars();
+      if (providerCalendars.length === 0) {
+        // Check if we already have calendars in the local DB from a previous sync
+        const existingCals = await getCalendarsForAccount(activeAccountId);
+        if (existingCals.length === 0) {
+          // No local calendars and no server calendars — try auto-discovering CalDAV settings
+          // This handles the case where the account was just re-added and CalDAV settings
+          // haven't been saved yet
+          const acc = await getAccount(activeAccountId);
+          if (acc && acc.imap_password && !acc.caldav_url) {
+            const discovery = await discoverCalDavSettings(acc.email);
+            if (discovery.caldavUrl) {
+              // Save the discovered CalDAV settings
+              await updateAccountCalDav(activeAccountId, {
+                caldavUrl: discovery.caldavUrl,
+                caldavUsername: acc.imap_username ?? acc.email,
+                caldavPassword: acc.imap_password,
+                calendarProvider: "caldav",
+              });
+              // Clear the cached provider so it picks up the new settings
+              const { removeCalendarProvider } = await import("@/services/calendar/providerFactory");
+              removeCalendarProvider(activeAccountId);
+              // Retry with the newly configured provider
+              const newProvider = await getCalendarProvider(activeAccountId);
+              providerCalendars = await newProvider.listCalendars();
+              if (providerCalendars.length === 0) {
+                throw new Error("No calendars found on the CalDAV server. Please check your CalDAV settings.");
+              }
+              // Fall through to upsert the calendars below
+            } else {
+              // Auto-discovery failed — but the IMAP fallback may still work.
+              // The first listCalendars() call already tried the IMAP fallback URL.
+              // If it returned empty (not an error), the server is reachable but has no calendars.
+              // Provide a more helpful message suggesting the user check their CalDAV server.
+              throw new Error(
+                `No calendars found on the CalDAV server (${acc.imap_host}). ` +
+                `The server is reachable but returned no calendar collections. ` +
+                `Please verify that CalDAV is enabled on your mail server and that your account has at least one calendar created.`,
+              );
+            }
+          } else if (acc && acc.caldav_url) {
+            // Account has CalDAV URL configured but no calendars found
+            throw new Error(
+              `No calendars found on the CalDAV server (${acc.caldav_url}). ` +
+              `Please verify that CalDAV is enabled and your account has at least one calendar.`,
+            );
+          } else {
+            throw new Error("No calendars found on the CalDAV server. Please check your CalDAV settings.");
+          }
+        }
+        // Calendars exist locally but server returned none — skip discovery,
+        // proceed to fetch events for existing calendars
+      } else {
+        for (const cal of providerCalendars) {
+          await upsertCalendar({
+            accountId: activeAccountId,
+            provider: provider.type,
+            remoteId: cal.remoteId,
+            displayName: cal.displayName,
+            color: cal.color,
+            isPrimary: cal.isPrimary,
+          });
+        }
       }
 
-      // Reload calendars from DB
-      const allCals = await getCalendarsForAccount(activeAccountId);
-      setCalendars(allCals);
+      // Remove duplicate calendars that point to the same underlying CalDAV resource
+      await deduplicateCalendars(activeAccountId);
+
+      // Reload calendars from DB — only show visible ones
+      const visibleCalsReload = await getVisibleCalendars(activeAccountId);
+      setCalendars(visibleCalsReload);
 
       // Fetch events for visible calendars
       const visibleCals = await getVisibleCalendars(activeAccountId);
+      let anyFetchFailed = false;
+      let lastFetchError: string | null = null;
       for (const cal of visibleCals) {
-        const apiEvents = await provider.fetchEvents(
-          cal.remote_id,
-          start.toISOString(),
-          end.toISOString(),
-        );
+        try {
+          const apiEvents = await provider.fetchEvents(
+            cal.remote_id,
+            start.toISOString(),
+            end.toISOString(),
+          );
 
-        for (const event of apiEvents) {
-          await upsertCalendarEventFromProvider(activeAccountId, cal.id, event);
+          for (const event of apiEvents) {
+            await upsertCalendarEventFromProvider(activeAccountId, cal.id, event);
+          }
+        } catch (err) {
+          // If one calendar fails, log it and continue with the others
+          // instead of failing the entire fetch
+          const msg = err instanceof Error ? err.message : String(err);
+          console.warn(`Failed to fetch events for calendar "${cal.display_name}":`, msg);
+          anyFetchFailed = true;
+          lastFetchError = msg;
         }
+      }
+      // Only show an error if ALL calendars failed to fetch
+      if (visibleCals.length > 0 && anyFetchFailed && lastFetchError) {
+        // Check if all calendars failed by seeing if we got any events at all
+        // If at least one calendar succeeded, don't show an error
+        const calendarIds = visibleCals.map((c) => c.id);
+        const fetched = await getCalendarEventsInRangeMulti(activeAccountId, calendarIds, startTs, endTs);
+        if (fetched.length === 0 && cached.length === 0) {
+          throw new Error(lastFetchError);
+        }
+        // At least some events loaded — suppress the error banner
       }
 
       // Reload events from DB
@@ -137,7 +218,10 @@ export function CalendarPage() {
       setCalendarError(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      if (message.includes("403") || message.includes("insufficient")) {
+      // Only show the re-authorization banner for Gmail accounts — IMAP/CalDAV accounts
+      // cannot use the Google OAuth re-auth flow
+      const isGmailAccount = activeAccount?.provider === "gmail";
+      if ((message.includes("403") || message.includes("insufficient")) && isGmailAccount) {
         if (reauthDoneRef.current) {
           reauthDoneRef.current = false;
           setCalendarError(
@@ -150,6 +234,7 @@ export function CalendarPage() {
         }
       } else {
         console.error("Failed to load calendar events:", err);
+        setCalendarError(message);
       }
     } finally {
       setLoading(false);
@@ -219,8 +304,12 @@ export function CalendarPage() {
       }
 
       if (!calendarRemoteId) {
-        // For Google, use "primary" as fallback
-        calendarRemoteId = "primary";
+        // For Google, use "primary" as fallback; for CalDAV, require a valid calendar
+        if (provider.type === "google_api") {
+          calendarRemoteId = "primary";
+        } else {
+          throw new Error("No calendar available. Please configure a CalDAV calendar first.");
+        }
       }
 
       const input: CreateEventInput = {
@@ -240,6 +329,7 @@ export function CalendarPage() {
       loadEvents();
     } catch (err) {
       console.error("Failed to create event:", err);
+      setCalendarError(err instanceof Error ? err.message : "Failed to create event");
     }
   }, [activeAccountId, calendars, loadEvents]);
 

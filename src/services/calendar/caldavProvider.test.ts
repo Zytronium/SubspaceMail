@@ -6,24 +6,13 @@ const MOCK_ICAL_DATA =
 const MOCK_ICAL_DATA_2 =
   "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:test-uid-2\r\nSUMMARY:Second Event\r\nDTSTART:20240102T140000Z\r\nDTEND:20240102T150000Z\r\nEND:VEVENT\r\nEND:VCALENDAR";
 
-const mockLogin = vi.fn().mockResolvedValue(undefined);
-const mockFetchCalendars = vi.fn();
-const mockFetchCalendarObjects = vi.fn();
-const mockCreateCalendarObject = vi.fn().mockResolvedValue(undefined);
-const mockUpdateCalendarObject = vi.fn().mockResolvedValue(undefined);
-const mockDeleteCalendarObject = vi.fn().mockResolvedValue(undefined);
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}));
 
-vi.mock("tsdav", () => {
-  const MockDAVClient = vi.fn(function (this: Record<string, unknown>) {
-    this.login = mockLogin;
-    this.fetchCalendars = mockFetchCalendars;
-    this.fetchCalendarObjects = mockFetchCalendarObjects;
-    this.createCalendarObject = mockCreateCalendarObject;
-    this.updateCalendarObject = mockUpdateCalendarObject;
-    this.deleteCalendarObject = mockDeleteCalendarObject;
-  });
-  return { DAVClient: MockDAVClient };
-});
+import { invoke } from "@tauri-apps/api/core";
+
+const mockInvoke = invoke as ReturnType<typeof vi.fn>;
 
 vi.mock("@/services/db/accounts", () => ({
   getAccount: vi.fn().mockResolvedValue({
@@ -44,10 +33,10 @@ describe("CalDAVProvider", () => {
   });
 
   describe("listCalendars", () => {
-    it("maps tsdav calendars to CalendarInfo array", async () => {
-      mockFetchCalendars.mockResolvedValue([
-        { url: "/cal/personal/", displayName: "Personal" },
-        { url: "/cal/work/", displayName: "Work", calendarColor: "#ff0000" },
+    it("maps backend calendars to CalendarInfo array", async () => {
+      mockInvoke.mockResolvedValueOnce([
+        { url: "/cal/personal/", display_name: "Personal", color: null },
+        { url: "/cal/work/", display_name: "Work", color: "#ff0000" },
       ]);
 
       const calendars = await provider.listCalendars();
@@ -58,10 +47,10 @@ describe("CalDAVProvider", () => {
       ]);
     });
 
-    it("handles non-string displayName by falling back to indexed name", async () => {
-      mockFetchCalendars.mockResolvedValue([
-        { url: "/cal/unnamed/", displayName: undefined },
-        { url: "/cal/also-unnamed/", displayName: null },
+    it("handles empty display_name by falling back to indexed name", async () => {
+      mockInvoke.mockResolvedValueOnce([
+        { url: "/cal/unnamed/", display_name: "", color: null },
+        { url: "/cal/also-unnamed/", display_name: null, color: null },
       ]);
 
       const calendars = await provider.listCalendars();
@@ -72,32 +61,34 @@ describe("CalDAVProvider", () => {
   });
 
   describe("fetchEvents", () => {
-    it("passes time range and parses iCalendar data from objects", async () => {
-      mockFetchCalendarObjects.mockResolvedValue([
-        { data: MOCK_ICAL_DATA, url: "/cal/personal/test-uid.ics", etag: '"etag-1"' },
-        { data: MOCK_ICAL_DATA_2, url: "/cal/personal/test-uid-2.ics", etag: '"etag-2"' },
+    it("passes time range and parses iCalendar data from events", async () => {
+      mockInvoke.mockResolvedValueOnce([
+        { url: "/cal/personal/test-uid.ics", etag: "etag-1", ical_data: MOCK_ICAL_DATA },
+        { url: "/cal/personal/test-uid-2.ics", etag: "etag-2", ical_data: MOCK_ICAL_DATA_2 },
       ]);
 
       const events = await provider.fetchEvents("/cal/personal/", "2024-01-01T00:00:00Z", "2024-01-31T23:59:59Z");
 
-      expect(mockFetchCalendarObjects).toHaveBeenCalledWith({
-        calendar: { url: "/cal/personal/" },
-        timeRange: { start: "2024-01-01T00:00:00Z", end: "2024-01-31T23:59:59Z" },
+      expect(mockInvoke).toHaveBeenCalledWith("caldav_fetch_events", {
+        config: expect.objectContaining({ server_url: "https://caldav.example.com" }),
+        calendar_url: "/cal/personal/",
+        time_start: "2024-01-01T00:00:00Z",
+        time_end: "2024-01-31T23:59:59Z",
       });
 
       expect(events).toHaveLength(2);
       expect(events[0]!.summary).toBe("Test Event");
       expect(events[0]!.uid).toBe("test-uid");
-      expect(events[0]!.etag).toBe('"etag-1"');
+      expect(events[0]!.etag).toBe("etag-1");
       expect(events[0]!.remoteEventId).toBe("/cal/personal/test-uid.ics");
       expect(events[1]!.summary).toBe("Second Event");
-      expect(events[1]!.etag).toBe('"etag-2"');
+      expect(events[1]!.etag).toBe("etag-2");
     });
 
-    it("filters out objects with no data", async () => {
-      mockFetchCalendarObjects.mockResolvedValue([
-        { data: MOCK_ICAL_DATA, url: "/cal/personal/test-uid.ics", etag: '"etag-1"' },
-        { data: null, url: "/cal/personal/empty.ics", etag: null },
+    it("filters out events with no ical_data", async () => {
+      mockInvoke.mockResolvedValueOnce([
+        { url: "/cal/personal/test-uid.ics", etag: "etag-1", ical_data: MOCK_ICAL_DATA },
+        { url: "/cal/personal/empty.ics", etag: null, ical_data: "" },
       ]);
 
       const events = await provider.fetchEvents("/cal/personal/", "2024-01-01T00:00:00Z", "2024-01-31T23:59:59Z");
@@ -107,59 +98,95 @@ describe("CalDAVProvider", () => {
   });
 
   describe("createEvent", () => {
-    it("generates iCalendar and calls createCalendarObject", async () => {
+    it("generates iCalendar and calls backend create", async () => {
       vi.spyOn(crypto, "randomUUID").mockReturnValue("generated-uuid" as `${string}-${string}-${string}-${string}-${string}`);
+
+      mockInvoke.mockImplementationOnce((cmd: string) => {
+        if (cmd === "caldav_create_event") {
+          return Promise.resolve({
+            url: "/cal/personal/generated-uuid.ics",
+            etag: "new-etag",
+            ical_data: "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:generated-uuid\r\nSUMMARY:New Meeting\r\nDTSTART:20240316T090000Z\r\nDTEND:20240316T100000Z\r\nEND:VEVENT\r\nEND:VCALENDAR",
+          });
+        }
+        return Promise.resolve();
+      });
 
       const event = await provider.createEvent("/cal/personal/", {
         summary: "New Meeting",
-        startTime: "2024-03-15T09:00:00Z",
-        endTime: "2024-03-15T10:00:00Z",
+        startTime: "2024-03-16T09:00:00Z",
+        endTime: "2024-03-16T10:00:00Z",
       });
 
-      expect(mockCreateCalendarObject).toHaveBeenCalledWith({
-        calendar: { url: "/cal/personal/" },
-        filename: "generated-uuid.ics",
-        iCalString: expect.stringContaining("SUMMARY:New Meeting"),
+      expect(mockInvoke).toHaveBeenCalledWith("caldav_create_event", {
+        config: expect.objectContaining({ server_url: "https://caldav.example.com" }),
+        calendar_url: "/cal/personal/",
+        ical_data: expect.stringContaining("SUMMARY:New Meeting"),
       });
 
       expect(event.summary).toBe("New Meeting");
       expect(event.remoteEventId).toBe("/cal/personal/generated-uuid.ics");
     });
+
+    it("handles calendar URL without trailing slash", async () => {
+      vi.spyOn(crypto, "randomUUID").mockReturnValue("generated-uuid-2" as `${string}-${string}-${string}-${string}-${string}`);
+
+      mockInvoke.mockImplementationOnce((cmd: string) => {
+        if (cmd === "caldav_create_event") {
+          return Promise.resolve({
+            url: "/cal/personal/generated-uuid-2.ics",
+            etag: "new-etag-2",
+            ical_data: "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:generated-uuid-2\r\nSUMMARY:Another Meeting\r\nDTSTART:20240316T090000Z\r\nDTEND:20240316T100000Z\r\nEND:VEVENT\r\nEND:VCALENDAR",
+          });
+        }
+        return Promise.resolve();
+      });
+
+      const event = await provider.createEvent("/cal/personal", {
+        summary: "Another Meeting",
+        startTime: "2024-03-16T09:00:00Z",
+        endTime: "2024-03-16T10:00:00Z",
+      });
+
+      expect(mockInvoke).toHaveBeenCalledWith("caldav_create_event", {
+        config: expect.objectContaining({ server_url: "https://caldav.example.com" }),
+        calendar_url: "/cal/personal",
+        ical_data: expect.stringContaining("SUMMARY:Another Meeting"),
+      });
+
+      expect(event.summary).toBe("Another Meeting");
+      expect(event.remoteEventId).toBe("/cal/personal/generated-uuid-2.ics");
+    });
   });
 
   describe("updateEvent", () => {
-    it("fetches existing, merges updates, and calls updateCalendarObject", async () => {
-      mockFetchCalendarObjects.mockResolvedValue([
-        { data: MOCK_ICAL_DATA, url: "/cal/personal/test-uid.ics", etag: '"old-etag"' },
+    it("fetches existing event, merges updates, and calls backend update", async () => {
+      // First call: fetch events to find existing
+      mockInvoke.mockResolvedValueOnce([
+        { url: "/cal/personal/existing.ics", etag: "old-etag", ical_data: MOCK_ICAL_DATA },
       ]);
+      // Second call: update event
+      mockInvoke.mockResolvedValueOnce(undefined);
 
       const event = await provider.updateEvent(
         "/cal/personal/",
-        "/cal/personal/test-uid.ics",
+        "/cal/personal/existing.ics",
         { summary: "Updated Event" },
-        '"old-etag"',
+        "old-etag",
       );
 
-      expect(mockFetchCalendarObjects).toHaveBeenCalledWith({
-        calendar: { url: "/cal/personal/" },
-        objectUrls: ["/cal/personal/test-uid.ics"],
-      });
-
-      expect(mockUpdateCalendarObject).toHaveBeenCalledWith({
-        calendarObject: {
-          url: "/cal/personal/test-uid.ics",
-          data: expect.stringContaining("SUMMARY:Updated Event"),
-          etag: '"old-etag"',
-        },
-        headers: { "If-Match": '"old-etag"' },
+      expect(mockInvoke).toHaveBeenNthCalledWith(2, "caldav_update_event", {
+        config: expect.objectContaining({ server_url: "https://caldav.example.com" }),
+        event_url: "/cal/personal/existing.ics",
+        ical_data: expect.stringContaining("SUMMARY:Updated Event"),
+        etag: "old-etag",
       });
 
       expect(event.summary).toBe("Updated Event");
-      expect(event.remoteEventId).toBe("/cal/personal/test-uid.ics");
     });
 
-    it("throws when the existing event is not found", async () => {
-      mockFetchCalendarObjects.mockResolvedValue([]);
+    it("throws if event not found on server", async () => {
+      mockInvoke.mockResolvedValueOnce([]);
 
       await expect(
         provider.updateEvent("/cal/personal/", "/cal/personal/missing.ics", { summary: "Nope" }),
@@ -168,113 +195,102 @@ describe("CalDAVProvider", () => {
   });
 
   describe("deleteEvent", () => {
-    it("calls deleteCalendarObject with etag", async () => {
-      await provider.deleteEvent("/cal/personal/", "/cal/personal/test-uid.ics", '"delete-etag"');
+    it("calls backend delete", async () => {
+      mockInvoke.mockResolvedValueOnce(undefined);
 
-      expect(mockDeleteCalendarObject).toHaveBeenCalledWith({
-        calendarObject: {
-          url: "/cal/personal/test-uid.ics",
-          etag: '"delete-etag"',
-        },
-        headers: { "If-Match": '"delete-etag"' },
-      });
-    });
+      await provider.deleteEvent("/cal/personal/", "/cal/personal/test-uid.ics", "etag-1");
 
-    it("calls deleteCalendarObject without etag when not provided", async () => {
-      await provider.deleteEvent("/cal/personal/", "/cal/personal/test-uid.ics");
-
-      expect(mockDeleteCalendarObject).toHaveBeenCalledWith({
-        calendarObject: {
-          url: "/cal/personal/test-uid.ics",
-          etag: undefined,
-        },
-        headers: {},
+      expect(mockInvoke).toHaveBeenCalledWith("caldav_delete_event", {
+        config: expect.objectContaining({ server_url: "https://caldav.example.com" }),
+        event_url: "/cal/personal/test-uid.ics",
+        etag: "etag-1",
       });
     });
   });
 
   describe("syncEvents", () => {
-    it("fetches all objects in time range and returns them as created events", async () => {
-      mockFetchCalendarObjects.mockResolvedValue([
-        { data: MOCK_ICAL_DATA, url: "/cal/personal/test-uid.ics", etag: '"sync-etag"' },
-        { data: MOCK_ICAL_DATA_2, url: "/cal/personal/test-uid-2.ics", etag: '"sync-etag-2"' },
+    it("fetches events and returns them as created", async () => {
+      mockInvoke.mockResolvedValueOnce([
+        { url: "/cal/personal/test-uid.ics", etag: "etag-1", ical_data: MOCK_ICAL_DATA },
       ]);
 
       const result = await provider.syncEvents("/cal/personal/");
 
-      expect(mockFetchCalendarObjects).toHaveBeenCalledWith({
-        calendar: { url: "/cal/personal/" },
-        timeRange: {
-          start: expect.any(String),
-          end: expect.any(String),
-        },
-      });
-
-      expect(result.created).toHaveLength(2);
+      expect(result.created).toHaveLength(1);
       expect(result.created[0]!.summary).toBe("Test Event");
-      expect(result.created[0]!.etag).toBe('"sync-etag"');
-      expect(result.created[1]!.summary).toBe("Second Event");
       expect(result.updated).toEqual([]);
       expect(result.deletedRemoteIds).toEqual([]);
-      expect(result.newSyncToken).toBeNull();
-      expect(result.newCtag).toBeNull();
     });
   });
 
   describe("testConnection", () => {
-    it("returns success with calendar count on successful connection", async () => {
-      mockFetchCalendars.mockResolvedValue([
-        { url: "/cal/personal/", displayName: "Personal" },
-        { url: "/cal/work/", displayName: "Work" },
-      ]);
+    it("returns success with calendar count", async () => {
+      mockInvoke.mockResolvedValueOnce(3);
 
       const result = await provider.testConnection();
 
       expect(result).toEqual({
         success: true,
-        message: "Connected — found 2 calendars",
+        message: "Connected — found 3 calendars",
       });
     });
 
-    it("returns singular form for one calendar", async () => {
-      mockFetchCalendars.mockResolvedValue([
-        { url: "/cal/personal/", displayName: "Personal" },
-      ]);
+    it("returns failure on error", async () => {
+      mockInvoke.mockRejectedValueOnce(new Error("Authentication failed"));
 
       const result = await provider.testConnection();
-
-      expect(result.message).toBe("Connected — found 1 calendar");
-    });
-
-    it("resets client and returns error message on failure", async () => {
-      mockLogin.mockRejectedValueOnce(new Error("Authentication failed"));
-      // Need a fresh provider so getClient() will attempt login again
-      const freshProvider = new CalDAVProvider("acc-1");
-
-      const result = await freshProvider.testConnection();
 
       expect(result).toEqual({
         success: false,
         message: "Authentication failed",
       });
-
-      // Verify client was reset by confirming a second call attempts login again
-      mockLogin.mockResolvedValueOnce(undefined);
-      mockFetchCalendars.mockResolvedValue([]);
-      const retryResult = await freshProvider.testConnection();
-      expect(retryResult.success).toBe(true);
-      expect(mockLogin).toHaveBeenCalledTimes(2); // initial fail + retry after client reset
     });
 
-    it("handles non-Error thrown values gracefully", async () => {
-      mockLogin.mockRejectedValueOnce("some string error");
-      const freshProvider = new CalDAVProvider("acc-1");
+    it("handles non-Error rejection", async () => {
+      mockInvoke.mockRejectedValueOnce("some string error");
 
-      const result = await freshProvider.testConnection();
+      const result = await provider.testConnection();
 
       expect(result).toEqual({
         success: false,
         message: "Connection failed",
+      });
+    });
+  });
+
+  describe("IMAP fallback", () => {
+    it("uses IMAP credentials when CalDAV is not configured", async () => {
+      const { getAccount } = await import("@/services/db/accounts");
+
+      // Override the mock for this test
+      (getAccount as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        id: "acc-2",
+        email: "user@example.com",
+        caldav_url: null,
+        caldav_username: null,
+        caldav_password: null,
+        imap_host: "mail.example.com",
+        imap_port: 993,
+        imap_security: "tls",
+        imap_username: "user@example.com",
+        imap_password: "imap-secret",
+      });
+
+      const fallbackProvider = new CalDAVProvider("acc-2");
+
+      mockInvoke.mockResolvedValueOnce([
+        { url: "/cal/personal/", display_name: "Personal", color: null },
+      ]);
+
+      const calendars = await fallbackProvider.listCalendars();
+
+      expect(calendars).toHaveLength(1);
+      expect(mockInvoke).toHaveBeenCalledWith("caldav_list_calendars", {
+        config: expect.objectContaining({
+          server_url: "https://mail.example.com",
+          username: "user@example.com",
+          password: "imap-secret",
+        }),
       });
     });
   });

@@ -26,6 +26,8 @@ import {
   updateCalendarSyncToken,
   deleteCalendarsForAccount,
   getCalendarById,
+  deduplicateCalendars,
+  normalizeCalendarUrl,
 } from "./calendars";
 import type { DbCalendar } from "./calendars";
 import { createMockDb } from "@/test/mocks";
@@ -63,7 +65,7 @@ describe("calendars service", () => {
       expect(mockDb.execute).toHaveBeenCalledOnce();
       expect(mockDb.execute).toHaveBeenCalledWith(
         expect.stringContaining("INSERT INTO calendars"),
-        [MOCK_UUID, "acc-1", "google", "remote-cal-1", "My Calendar", "#4285f4", 1],
+        [MOCK_UUID, "acc-1", "google", "remote-cal-1", "My Calendar", "#4285f4", 1, 1],
       );
     });
 
@@ -84,7 +86,7 @@ describe("calendars service", () => {
       expect(id).toBe(existingId);
       expect(mockDb.execute).toHaveBeenCalledWith(
         expect.stringContaining("ON CONFLICT(account_id, remote_id) DO UPDATE"),
-        [MOCK_UUID, "acc-1", "google", "remote-cal-1", "Updated Name", "#0b8043", 0],
+        [MOCK_UUID, "acc-1", "google", "remote-cal-1", "Updated Name", "#0b8043", 0, 1],
       );
     });
 
@@ -225,6 +227,113 @@ describe("calendars service", () => {
       const result = await getCalendarById("nonexistent");
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe("normalizeCalendarUrl", () => {
+    it("strips trailing slashes and lowercases", () => {
+      expect(normalizeCalendarUrl("https://mail.example.com/Dav/Cal/User/")).toBe(
+        "mail.example.com/dav/cal/user",
+      );
+    });
+
+    it("removes the scheme", () => {
+      expect(normalizeCalendarUrl("https://mail.example.com/dav/cal/user")).toBe(
+        "mail.example.com/dav/cal/user",
+      );
+      expect(normalizeCalendarUrl("http://mail.example.com/dav/cal/user")).toBe(
+        "mail.example.com/dav/cal/user",
+      );
+    });
+
+    it("handles URLs without scheme", () => {
+      expect(normalizeCalendarUrl("mail.example.com/dav/cal/user/")).toBe(
+        "mail.example.com/dav/cal/user",
+      );
+    });
+
+    it("treats http and https as equivalent", () => {
+      expect(normalizeCalendarUrl("http://mail.example.com/dav/cal/user")).toBe(
+        normalizeCalendarUrl("https://mail.example.com/dav/cal/user"),
+      );
+    });
+  });
+
+  describe("deduplicateCalendars", () => {
+    it("deletes duplicate calendars with the same normalized URL", async () => {
+      const cals: DbCalendar[] = [
+        makeCal({ id: "cal-1", remote_id: "https://mail.example.com/dav/cal/user/", created_at: 1000, is_primary: 1 }),
+        makeCal({ id: "cal-2", remote_id: "https://mail.example.com/dav/cal/user", created_at: 2000, is_primary: 0 }),
+      ];
+      mockDb.select.mockResolvedValueOnce(cals);
+
+      const deleted = await deduplicateCalendars("acc-1");
+
+      expect(deleted).toBe(1);
+      // Should delete events and calendar for cal-2 (the duplicate)
+      expect(mockDb.execute).toHaveBeenCalledWith(
+        expect.stringContaining("DELETE FROM calendar_events"),
+        ["cal-2"],
+      );
+      expect(mockDb.execute).toHaveBeenCalledWith(
+        expect.stringContaining("DELETE FROM calendars"),
+        ["cal-2"],
+      );
+    });
+
+    it("keeps the primary calendar when duplicates exist", async () => {
+      const cals: DbCalendar[] = [
+        makeCal({ id: "cal-1", remote_id: "https://mail.example.com/dav/cal/user", created_at: 2000, is_primary: 0 }),
+        makeCal({ id: "cal-2", remote_id: "https://mail.example.com/dav/cal/user/", created_at: 1000, is_primary: 1 }),
+      ];
+      mockDb.select.mockResolvedValueOnce(cals);
+
+      const deleted = await deduplicateCalendars("acc-1");
+
+      expect(deleted).toBe(1);
+      // cal-2 is primary, so cal-1 should be deleted
+      expect(mockDb.execute).toHaveBeenCalledWith(
+        expect.stringContaining("DELETE FROM calendars"),
+        ["cal-1"],
+      );
+    });
+
+    it("keeps the oldest calendar when none is primary", async () => {
+      const cals: DbCalendar[] = [
+        makeCal({ id: "cal-1", remote_id: "https://mail.example.com/dav/cal/user", created_at: 2000 }),
+        makeCal({ id: "cal-2", remote_id: "https://mail.example.com/dav/cal/user/", created_at: 1000 }),
+      ];
+      mockDb.select.mockResolvedValueOnce(cals);
+
+      const deleted = await deduplicateCalendars("acc-1");
+
+      expect(deleted).toBe(1);
+      // cal-2 is older, so cal-1 should be deleted
+      expect(mockDb.execute).toHaveBeenCalledWith(
+        expect.stringContaining("DELETE FROM calendars"),
+        ["cal-1"],
+      );
+    });
+
+    it("returns 0 when no duplicates exist", async () => {
+      const cals: DbCalendar[] = [
+        makeCal({ id: "cal-1", remote_id: "https://mail.example.com/dav/cal/user1" }),
+        makeCal({ id: "cal-2", remote_id: "https://mail.example.com/dav/cal/user2" }),
+      ];
+      mockDb.select.mockResolvedValueOnce(cals);
+
+      const deleted = await deduplicateCalendars("acc-1");
+
+      expect(deleted).toBe(0);
+      expect(mockDb.execute).not.toHaveBeenCalled();
+    });
+
+    it("returns 0 when only one calendar exists", async () => {
+      mockDb.select.mockResolvedValueOnce([makeCal({ id: "cal-1" })]);
+
+      const deleted = await deduplicateCalendars("acc-1");
+
+      expect(deleted).toBe(0);
     });
   });
 });
