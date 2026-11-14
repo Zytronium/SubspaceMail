@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.25](https://github.com/Zytronium/SubspaceMail/compare/velo-v0.4.24...velo-v0.4.25) (2026-11-14)
+
+
+### Bug Fixes
+
+* auto updater doesn't work ([07043e3](https://github.com/Zytronium/SubspaceMail/commit/07043e34efbc0ba9c1dfad0347f931ec69d51e30))
+* fix windows build and pin version back to correct version 0.4.22 ([7fda62a](https://github.com/Zytronium/SubspaceMail/commit/7fda62a602dbba05f6ae4f5d4bc248f868dbff3c))
+* IMAP sync is slow sometimes due to failing to load and falling back to raw TCP fetch and emails periodically all disappear and reappear ([93306b5](https://github.com/Zytronium/SubspaceMail/commit/93306b5eafb38314132445fc74aa68a28196889b))
+* remove native title bar that shows in addition to custom title bar ([997f207](https://github.com/Zytronium/SubspaceMail/commit/997f207bfe2be63d46c5d39f792261f04a76daee))
+
 ## [0.4.24](https://github.com/Zytronium/SubspaceMail/compare/velo-v0.4.23...velo-v0.4.24) (2026-11-14)
 
 
