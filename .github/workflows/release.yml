@@ -80,7 +80,13 @@ jobs:
           if [ -n "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" ]; then
             mkdir -p ~/.tauri
             printf '%s' "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" > ~/.tauri/subspacemail.key
-            echo "TAURI_SIGNING_PRIVATE_KEY=$HOME/.tauri/subspacemail.key" >> "$GITHUB_ENV"
+            # On Windows, convert Git Bash path to Windows-native path for Tauri's Rust code
+            if [[ "$RUNNER_OS" == "Windows" ]]; then
+              KEY_PATH=$(cygpath -w "$HOME/.tauri/subspacemail.key")
+            else
+              KEY_PATH="$HOME/.tauri/subspacemail.key"
+            fi
+            echo "TAURI_SIGNING_PRIVATE_KEY=$KEY_PATH" >> "$GITHUB_ENV"
             if [ -n "${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}" ]; then
               echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}" >> "$GITHUB_ENV"
             fi
@@ -139,7 +145,13 @@ jobs:
           if [ -n "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" ]; then
             mkdir -p ~/.tauri
             printf '%s' "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" > ~/.tauri/subspacemail.key
-            echo "TAURI_SIGNING_PRIVATE_KEY=$HOME/.tauri/subspacemail.key" >> "$GITHUB_ENV"
+            # On Windows, convert Git Bash path to Windows-native path for Tauri's Rust code
+            if [[ "$RUNNER_OS" == "Windows" ]]; then
+              KEY_PATH=$(cygpath -w "$HOME/.tauri/subspacemail.key")
+            else
+              KEY_PATH="$HOME/.tauri/subspacemail.key"
+            fi
+            echo "TAURI_SIGNING_PRIVATE_KEY=$KEY_PATH" >> "$GITHUB_ENV"
             if [ -n "${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}" ]; then
               echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}" >> "$GITHUB_ENV"
             fi
