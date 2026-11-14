@@ -107,7 +107,7 @@ Thread summaries, smart reply suggestions, AI compose & reply, text transform (i
 
 ### Calendar
 
-Google Calendar sync with month, week, and day views. Create events without leaving the app.
+Google Calendar and CalDAV calendar sync with month, week, and day views. Create events without leaving the app.
 
 ### UI & Design
 
