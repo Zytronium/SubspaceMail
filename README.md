@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  A fast, keyboard-first desktop email client built with Tauri, React, and Rust.<br />
+  A fast, keyboard-first desktop email client built with Tauri, React, TypeScript and Rust.<br />
   Local-first. Privacy-focused. AI-optional.<br />
   A semi-maintained fork of <a href="https://github.com/avihaymenahem/velo">Velo</a> mail.
 </p>
