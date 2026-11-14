@@ -2,6 +2,41 @@ import Database from "@tauri-apps/plugin-sql";
 
 let db: Database | null = null;
 
+/**
+ * Simple mutex for serializing concurrent transactions.
+ */
+let txMutex: Promise<void> = Promise.resolve();
+
+/**
+ * Execute a callback within a SQLite transaction (BEGIN/COMMIT/ROLLBACK).
+ * Serialises concurrent calls via a mutex so transactions never overlap.
+ */
+export async function withTransaction<T>(cb: () => Promise<T>): Promise<T> {
+  const previous = txMutex;
+  let resolveMutex: () => void;
+  txMutex = new Promise((resolve) => {
+    resolveMutex = resolve;
+  });
+  await previous;
+  try {
+    const db = await getDb();
+    await db.execute("BEGIN TRANSACTION");
+    const result = await cb();
+    await db.execute("COMMIT");
+    return result;
+  } catch (err) {
+    try {
+      const db = await getDb();
+      await db.execute("ROLLBACK");
+    } catch {
+      // SQLite may have already auto-rolled back; ignore
+    }
+    throw err;
+  } finally {
+    resolveMutex!();
+  }
+}
+
 export async function getDb(): Promise<Database> {
   if (!db) {
     db = await Database.load("sqlite:subspacemail.db");

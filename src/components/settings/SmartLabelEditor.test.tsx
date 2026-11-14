@@ -120,9 +120,15 @@ describe("SmartLabelEditor", () => {
 
     fireEvent.click(screen.getByText("+ Add smart label"));
 
-    // Select label
-    const select = screen.getByRole("combobox");
-    fireEvent.change(select, { target: { value: "label-work" } });
+    // Open the custom Select dropdown by clicking the combobox button
+    const combobox = screen.getByRole("combobox");
+    fireEvent.click(combobox);
+
+    // Click the "Work" option in the opened dropdown
+    await waitFor(() => {
+      const option = screen.getByRole("option", { name: "Work" });
+      fireEvent.click(option);
+    });
 
     // Enter description
     const textarea = screen.getByPlaceholderText("e.g., Job applications and career opportunities");
@@ -192,6 +198,15 @@ describe("SmartLabelEditor", () => {
     await waitFor(() => screen.getByText("+ Add smart label"));
 
     fireEvent.click(screen.getByText("+ Add smart label"));
+
+    // Open the custom Select dropdown
+    const combobox = screen.getByRole("combobox");
+    fireEvent.click(combobox);
+
+    // Wait for options to appear
+    await waitFor(() => {
+      screen.getByRole("option", { name: "Work" });
+    });
 
     const options = screen.getAllByRole("option");
     const optionTexts = options.map((o) => o.textContent);

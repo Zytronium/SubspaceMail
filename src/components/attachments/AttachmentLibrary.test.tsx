@@ -137,9 +137,12 @@ describe("AttachmentLibrary", () => {
     render(<AttachmentLibrary />);
     await screen.findByText("report.pdf");
 
-    // Select "Images" type filter
-    const typeSelect = screen.getByDisplayValue("All types");
-    fireEvent.change(typeSelect, { target: { value: "images" } });
+    // Open the custom Select dropdown for type filter
+    const typeCombobox = screen.getAllByRole("combobox")[0];
+    fireEvent.click(typeCombobox);
+
+    // Click the "Images" option
+    fireEvent.click(screen.getByRole("option", { name: "Images" }));
 
     expect(screen.queryByText("report.pdf")).not.toBeInTheDocument();
     expect(screen.getByText("photo.png")).toBeInTheDocument();
