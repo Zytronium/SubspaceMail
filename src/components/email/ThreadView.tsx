@@ -408,9 +408,11 @@ export function ThreadView({ thread }: ThreadViewProps) {
               </span>
             )}
           </h1>
-          <div className="text-xs text-text-tertiary mt-1">
-            {messages.length} message{messages.length !== 1 ? "s" : ""} in this thread
-          </div>
+          {messages.length > 1 && (
+            <div className="text-xs text-text-tertiary mt-1">
+              {messages.length} message{messages.length !== 1 ? "s" : ""} in this thread
+            </div>
+          )}
         </div>
 
         {/* AI Summary */}

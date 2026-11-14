@@ -155,26 +155,20 @@ async function syncImapAccount(accountId: string): Promise<void> {
     // Force a full re-sync to recover.
     // Also recover if folder sync states exist but have last_uid = 0,
     // meaning the initial sync saved state without actually storing messages.
-    // Also recover if ALL existing folders returned 0 new UIDs — this means
-    // the initial sync may have stored broken data (e.g., empty bodies from
-    // async-imap parsing issues) and delta sync can't find anything new.
     // Also recover if messages have broken body content (raw MIME or empty bodies).
+    // Note: do NOT trigger recovery just because all folders have 0 new UIDs —
+    // that is normal when no new mail has arrived since the last sync.
     if (result.messages.length === 0) {
       const threadCount = await getThreadCountForAccount(accountId);
       const syncStates = await getAllFolderSyncStates(accountId);
       const hasEmptySyncState = syncStates.some((s) => s.last_uid === 0);
-      const allFoldersEmpty =
-        result.foldersChecked !== undefined &&
-        result.foldersChecked > 0 &&
-        result.foldersWithNewUids === 0;
       const brokenMsgCount = await countBrokenMessagesForAccount(accountId);
       const hasBrokenMessages = brokenMsgCount > 0;
-      if (threadCount === 0 || hasEmptySyncState || allFoldersEmpty || hasBrokenMessages) {
+      if (threadCount === 0 || hasEmptySyncState || hasBrokenMessages) {
         console.warn(
           `[syncManager] IMAP delta sync returned 0 new messages` +
           (threadCount === 0 ? ` and DB has 0 threads` : "") +
           (hasEmptySyncState ? ` and folder sync states have last_uid=0` : "") +
-          (allFoldersEmpty ? ` and all ${result.foldersChecked} folders had 0 new UIDs` : "") +
           (hasBrokenMessages ? ` and ${brokenMsgCount} messages have broken body content` : "") +
           ` for ${accountId} — forcing full re-sync`,
         );
@@ -352,6 +346,7 @@ async function runSync(accountIds: string[]): Promise<void> {
   }
 
   syncPromise = (async () => {
+    const syncedIds = new Set(accountIds);
     try {
       for (const id of accountIds) {
         await syncAccountInternal(id);
@@ -361,10 +356,14 @@ async function runSync(accountIds: string[]): Promise<void> {
     }
 
     // Drain the queue — if something was queued while we were syncing, run it now
+    // but skip accounts that were just synced to avoid immediate re-sync loops
     if (pendingAccountIds) {
       const queued = pendingAccountIds;
       pendingAccountIds = null;
-      await runSync(queued);
+      const needSync = queued.filter((id) => !syncedIds.has(id));
+      if (needSync.length > 0) {
+        await runSync(needSync);
+      }
     }
   })();
 
