@@ -3,6 +3,13 @@
 ## [0.4.21](https://github.com/Zytronium/SubspaceMail/compare/velo-v0.4.21...velo-v0.4.21) (2026-11-14)
 
 
+### Bug Fixes
+
+* fix tests and github CI/CD ([1154903](https://github.com/Zytronium/SubspaceMail/commit/1154903a60cdfebb047701b48828a07b50c7f3ca))
+
+## [0.4.21](https://github.com/Zytronium/SubspaceMail/compare/velo-v0.4.21...velo-v0.4.21) (2026-11-14)
+
+
 ### ⚠ BREAKING CHANGES
 
 * Migration 18 adds 3 new database tables (writing_style_profiles, tasks, task_tags) and 2 new default settings. The migration runner now wraps each migration in a transaction. The taskStore is the 9th Zustand store and is initialized on app startup. These changes require a fresh app restart to run the new migration.
