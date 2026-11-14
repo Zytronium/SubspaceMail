@@ -84,6 +84,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
+          tauriScript: npm tauri
           releaseId: ${{ inputs.release_id }}
           updaterJsonKeepUniversal: true
           args: ${{ matrix.args }}
@@ -96,6 +97,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
+          tauriScript: npm tauri
           tagName: v__VERSION__
           releaseName: "Subspace Mail v__VERSION__"
           releaseBody: "See the assets below to download for your platform."
@@ -168,6 +170,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
+          tauriScript: npm tauri
           releaseId: ${{ inputs.release_id }}
           updaterJsonKeepUniversal: true
           args: --target universal-apple-darwin
@@ -184,6 +187,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
+          tauriScript: npm tauri
           tagName: v__VERSION__
           releaseName: "Subspace Mail v__VERSION__"
           releaseBody: "See the assets below to download for your platform."
@@ -200,6 +204,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
+          tauriScript: npm tauri
           releaseId: ${{ inputs.release_id }}
           updaterJsonKeepUniversal: true
           args: --target universal-apple-darwin
@@ -212,6 +217,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
+          tauriScript: npm tauri
           tagName: v__VERSION__
           releaseName: "Subspace Mail v__VERSION__"
           releaseBody: |
