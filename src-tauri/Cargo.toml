@@ -1,6 +1,6 @@
 [package]
 name = "subspacemail"
-version = "0.4.24" # x-release-please-version
+version = "0.4.22" # x-release-please-version
 description = "Subspace Mail - Email at the speed of subspace"
 authors = ["Zytronium", "Avihay"]
 license = "Apache-2.0"

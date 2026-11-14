@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.22](https://github.com/Zytronium/SubspaceMail/compare/velo-v0.4.24...velo-v0.4.22) (2026-11-14)
+
+
+### Bug Fixes
+
+* fix windows build and pin version back to correct version 0.4.22 ([7fda62a](https://github.com/Zytronium/SubspaceMail/commit/7fda62a602dbba05f6ae4f5d4bc248f868dbff3c))
+
 ## [0.4.24](https://github.com/Zytronium/SubspaceMail/compare/velo-v0.4.23...velo-v0.4.24) (2026-11-14)
 
 
