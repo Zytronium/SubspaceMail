@@ -72,7 +72,7 @@ export async function initNotifications(): Promise<void> {
     ]);
 
     await onAction(async (event) => {
-      const actionId = event.actionTypeId;
+      const actionId = event.actionId;
       const ctx = lastNotificationContext;
 
       if (actionId === "reply" && ctx?.threadId && ctx?.accountId) {
