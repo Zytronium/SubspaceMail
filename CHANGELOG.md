@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.23](https://github.com/Zytronium/SubspaceMail/compare/velo-v0.4.22...velo-v0.4.23) (2026-11-14)
+
+
+### Bug Fixes
+
+* remove pnpm lock files and force npm in tauri-action ([98ca8e5](https://github.com/Zytronium/SubspaceMail/commit/98ca8e563dac8a66ca9c649af65a5b316a408dd4))
+
 ## [0.4.22](https://github.com/Zytronium/SubspaceMail/compare/velo-v0.4.21...velo-v0.4.22) (2026-11-14)
 
 
