@@ -49,6 +49,8 @@ export interface CalendarSyncResult {
   deletedRemoteIds: string[];
   newSyncToken: string | null;
   newCtag: string | null;
+  /** Optional: set of remote event URLs that exist on the server, used by the sync manager to detect deletions */
+  remoteUrlsOnServer?: string[];
 }
 
 export interface CalendarProvider {

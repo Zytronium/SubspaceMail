@@ -35,26 +35,26 @@ export function CalendarPage() {
   const getRange = useCallback((): { start: Date; end: Date } => {
     const d = new Date(currentDate);
     if (view === "month") {
-      const start = new Date(d.getFullYear(), d.getMonth(), 1);
-      start.setDate(start.getDate() - start.getDay());
-      const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-      end.setDate(end.getDate() + (6 - end.getDay()));
-      end.setHours(23, 59, 59, 999);
+      const start = new Date(Date.UTC(d.getFullYear(), d.getMonth(), 1));
+      start.setUTCDate(start.getUTCDate() - start.getUTCDay());
+      const end = new Date(Date.UTC(d.getFullYear(), d.getMonth() + 1, 0));
+      end.setUTCDate(end.getUTCDate() + (6 - end.getUTCDay()));
+      end.setUTCHours(23, 59, 59, 999);
       return { start, end };
     }
     if (view === "week") {
-      const start = new Date(d);
-      start.setDate(start.getDate() - start.getDay());
-      start.setHours(0, 0, 0, 0);
+      const start = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+      start.setUTCDate(start.getUTCDate() - start.getUTCDay());
+      start.setUTCHours(0, 0, 0, 0);
       const end = new Date(start);
-      end.setDate(end.getDate() + 6);
-      end.setHours(23, 59, 59, 999);
+      end.setUTCDate(end.getUTCDate() + 6);
+      end.setUTCHours(23, 59, 59, 999);
       return { start, end };
     }
-    const start = new Date(d);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(d);
-    end.setHours(23, 59, 59, 999);
+    const start = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    start.setUTCHours(0, 0, 0, 0);
+    const end = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    end.setUTCHours(23, 59, 59, 999);
     return { start, end };
   }, [currentDate, view]);
 
@@ -178,6 +178,7 @@ export function CalendarPage() {
       const visibleCals = await getVisibleCalendars(activeAccountId);
       let anyFetchFailed = false;
       let lastFetchError: string | null = null;
+      let totalFetched = 0;
       for (const cal of visibleCals) {
         try {
           const apiEvents = await provider.fetchEvents(
@@ -185,9 +186,9 @@ export function CalendarPage() {
             start.toISOString(),
             end.toISOString(),
           );
-
           for (const event of apiEvents) {
             await upsertCalendarEventFromProvider(activeAccountId, cal.id, event);
+            totalFetched++;
           }
         } catch (err) {
           // If one calendar fails, log it and continue with the others
@@ -244,8 +245,14 @@ export function CalendarPage() {
   useEffect(() => {
     loadCalendars();
     loadEvents();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAccountId, currentDate, view]);
+  }, [activeAccountId, currentDate, view, loadCalendars, loadEvents]);
+
+  // Refresh when background sync completes
+  useEffect(() => {
+    const handler = () => loadEvents();
+    window.addEventListener("subspacemail-calendar-sync-done", handler);
+    return () => window.removeEventListener("subspacemail-calendar-sync-done", handler);
+  }, [loadEvents]);
 
   const handlePrev = useCallback(() => {
     setCurrentDate((d) => {
@@ -277,6 +284,7 @@ export function CalendarPage() {
     location: string;
     startTime: string;
     endTime: string;
+    isAllDay: boolean;
     calendarId?: string;
   }) => {
     if (!activeAccountId) return;
@@ -318,6 +326,7 @@ export function CalendarPage() {
         location: eventData.location || undefined,
         startTime: eventData.startTime,
         endTime: eventData.endTime,
+        isAllDay: eventData.isAllDay,
       };
 
       const created = await provider.createEvent(calendarRemoteId, input);
@@ -326,7 +335,11 @@ export function CalendarPage() {
       await upsertCalendarEventFromProvider(activeAccountId, calendarDbId ?? null, created);
 
       setShowCreate(false);
-      loadEvents();
+
+      // Navigate to the event's date so it's visible in the current view
+      // (the useEffect on currentDate will trigger loadEvents automatically)
+      const eventDate = new Date(eventData.startTime);
+      setCurrentDate(eventDate);
     } catch (err) {
       console.error("Failed to create event:", err);
       setCalendarError(err instanceof Error ? err.message : "Failed to create event");
@@ -469,7 +482,7 @@ async function upsertCalendarEventFromProvider(
 ): Promise<void> {
   await upsertCalendarEvent({
     accountId,
-    googleEventId: event.remoteEventId,
+    googleEventId: event.remoteEventId ?? crypto.randomUUID(),
     summary: event.summary,
     description: event.description,
     location: event.location,

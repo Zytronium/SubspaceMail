@@ -126,3 +126,11 @@ export async function deleteCalendarEvent(eventId: string): Promise<void> {
   const db = await getDb();
   await db.execute("DELETE FROM calendar_events WHERE id = $1", [eventId]);
 }
+
+export async function getEventsByCalendarId(calendarId: string): Promise<DbCalendarEvent[]> {
+  const db = await getDb();
+  return db.select<DbCalendarEvent[]>(
+    "SELECT * FROM calendar_events WHERE calendar_id = $1",
+    [calendarId],
+  );
+}

@@ -10,8 +10,10 @@ interface DayViewProps {
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 export function DayView({ currentDate, events, onEventClick }: DayViewProps) {
-  const dayStart = new Date(currentDate);
-  dayStart.setHours(0, 0, 0, 0);
+  // Use UTC day start to match the UTC timestamps stored from CalDAV
+  const dayStart = new Date(Date.UTC(
+    currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate()
+  ));
 
   // Pre-bucket events by hour (O(E) instead of O(24×E))
   const { hourEvents: hourEventMap, allDayEvents } = useMemo(() => {
@@ -26,7 +28,7 @@ export function DayView({ currentDate, events, onEventClick }: DayViewProps) {
         for (const hour of HOURS) {
           const hStart = dayTs + hour * 3600;
           const hEnd = hStart + 3600;
-          if (e.start_time < hEnd && e.end_time > hStart) {
+          if (e.start_time < hEnd && e.end_time >= hStart) {
             const list = hMap.get(hour);
             if (list) list.push(e);
             else hMap.set(hour, [e]);

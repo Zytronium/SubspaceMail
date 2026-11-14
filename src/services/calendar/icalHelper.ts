@@ -22,8 +22,16 @@ export function generateVEvent(event: CreateEventInput | UpdateEventInput, uid?:
 
   if (event.startTime && event.endTime) {
     if (event.isAllDay) {
-      lines.push(`DTSTART;VALUE=DATE:${formatDateOnly(new Date(event.startTime))}`);
-      lines.push(`DTEND;VALUE=DATE:${formatDateOnly(new Date(event.endTime))}`);
+      // Extract the date directly from the ISO string to avoid timezone conversion issues
+      // The input is an ISO string like "2025-12-25T00:00:00Z" or "2025-12-25T00:00"
+      const startParts = event.startTime.split("T")[0]?.split("-");
+      const endParts = event.endTime.split("T")[0]?.split("-");
+      if (startParts?.length === 3) {
+        lines.push(`DTSTART;VALUE=DATE:${startParts[0]}${startParts[1]}${startParts[2]}`);
+      }
+      if (endParts?.length === 3) {
+        lines.push(`DTEND;VALUE=DATE:${endParts[0]}${endParts[1]}${endParts[2]}`);
+      }
     } else {
       lines.push(`DTSTART:${formatDateTimeUTC(new Date(event.startTime))}`);
       lines.push(`DTEND:${formatDateTimeUTC(new Date(event.endTime))}`);
@@ -62,6 +70,7 @@ export function parseVEvent(icalData: string, href?: string): CalendarEventData 
   let location: string | null = null;
   let dtstart: string | null = null;
   let dtend: string | null = null;
+  let duration: string | null = null;
   let status = "confirmed";
   let organizerEmail: string | null = null;
   let isAllDay = false;
@@ -96,6 +105,13 @@ export function parseVEvent(icalData: string, href?: string): CalendarEventData 
         break;
       case "DTEND":
         dtend = value;
+        // DTEND can also indicate all-day if it has VALUE=DATE
+        if (params.includes("VALUE=DATE") && !params.includes("VALUE=DATE-TIME")) {
+          isAllDay = true;
+        }
+        break;
+      case "DURATION":
+        duration = value;
         break;
       case "STATUS":
         status = value.toLowerCase();
@@ -122,7 +138,14 @@ export function parseVEvent(icalData: string, href?: string): CalendarEventData 
   }
 
   const startTime = dtstart ? parseICalDateTime(dtstart, isAllDay) : 0;
-  const endTime = dtend ? parseICalDateTime(dtend, isAllDay) : startTime + 3600;
+  let endTime: number;
+  if (dtend) {
+    endTime = parseICalDateTime(dtend, isAllDay);
+  } else if (duration && startTime > 0) {
+    endTime = startTime + parseICalDuration(duration);
+  } else {
+    endTime = startTime + 3600;
+  }
 
   return {
     remoteEventId: href ?? uid ?? crypto.randomUUID(),
@@ -152,12 +175,6 @@ function formatDateTimeUTC(date: Date): string {
   return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 }
 
-function formatDateOnly(date: Date): string {
-  const y = date.getUTCFullYear();
-  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const d = String(date.getUTCDate()).padStart(2, "0");
-  return `${y}${m}${d}`;
-}
 
 function escapeICalText(text: string): string {
   return text
@@ -177,15 +194,41 @@ function unescapeICalText(text: string): string {
 
 function parseICalDateTime(value: string, isAllDay: boolean): number {
   if (isAllDay) {
-    // Format: YYYYMMDD
+    // Format: YYYYMMDD — use UTC to match the UTC day boundaries used in calendar views
     const y = parseInt(value.substring(0, 4), 10);
     const m = parseInt(value.substring(4, 6), 10) - 1;
     const d = parseInt(value.substring(6, 8), 10);
-    return Math.floor(new Date(y, m, d).getTime() / 1000);
+    return Math.floor(Date.UTC(y, m, d) / 1000);
   }
 
-  // Format: YYYYMMDDTHHMMSS or YYYYMMDDTHHMMSSZ
-  const isUTC = value.endsWith("Z");
+  // Format: YYYYMMDDTHHMMSS or YYYYMMDDTHHMMSSZ or YYYYMMDDTHHMMSS+HHMM
+  // Always store as UTC timestamps for consistent filtering in calendar views.
+  // For datetimes without a timezone indicator (floating times), treat them as UTC
+  // to avoid timezone-dependent behavior — the event will display correctly in the
+  // user's local timezone when rendered.
+
+  // Check for timezone offset (e.g., +0530, -0400)
+  const offsetMatch = value.match(/([+-])(\d{2})(\d{2})$/);
+  if (offsetMatch) {
+    // Has timezone offset — parse the local time and adjust to UTC
+    const sign = (offsetMatch[1] ?? '+') === '+' ? -1 : 1; // subtract offset to get UTC
+    const offsetHours = parseInt(offsetMatch[2] ?? '0', 10);
+    const offsetMinutes = parseInt(offsetMatch[3] ?? '0', 10);
+    const cleaned = value.slice(0, -5); // strip the offset
+    const y = parseInt(cleaned.substring(0, 4), 10);
+    const m = parseInt(cleaned.substring(4, 6), 10) - 1;
+    const d = parseInt(cleaned.substring(6, 8), 10);
+    const h = parseInt(cleaned.substring(9, 11), 10);
+    const min = parseInt(cleaned.substring(11, 13), 10);
+    const s = parseInt(cleaned.substring(13, 15), 10) || 0;
+    const date = new Date(Date.UTC(y, m, d, h, min, s));
+    // Adjust by the offset to get UTC
+    date.setUTCMinutes(date.getUTCMinutes() + sign * (offsetHours * 60 + offsetMinutes));
+    const result = Math.floor(date.getTime() / 1000);
+    return Number.isFinite(result) ? result : 0;
+  }
+
+  // UTC (Z suffix) or floating time — treat both as UTC
   const cleaned = value.replace("Z", "");
   const y = parseInt(cleaned.substring(0, 4), 10);
   const m = parseInt(cleaned.substring(4, 6), 10) - 1;
@@ -194,9 +237,33 @@ function parseICalDateTime(value: string, isAllDay: boolean): number {
   const min = parseInt(cleaned.substring(11, 13), 10);
   const s = parseInt(cleaned.substring(13, 15), 10) || 0;
 
-  const date = isUTC
-    ? new Date(Date.UTC(y, m, d, h, min, s))
-    : new Date(y, m, d, h, min, s);
+  const date = new Date(Date.UTC(y, m, d, h, min, s));
+  const result = Math.floor(date.getTime() / 1000);
+  return Number.isFinite(result) ? result : 0;
+}
 
-  return Math.floor(date.getTime() / 1000);
+/**
+ * Parse an iCalendar DURATION value (RFC 5545 §3.3.10) to seconds.
+ * Format: P[n]W or P[n]Y[n]M[n]DT[n]H[n]M[n]S
+ * e.g., PT1H30M = 5400 seconds, P1D = 86400 seconds
+ */
+function parseICalDuration(value: string): number {
+  // RFC 5545 duration: P[n]W or P[n]Y[n]M[n]DT[n]H[n]M[n]S
+  const match = value.match(/^(-?)P(?:((\d+)W)|(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?)$/);
+  if (!match) return 3600; // fallback: 1 hour
+
+  const sign = match[1] === '-' ? -1 : 1;
+  const weeks = match[3] ? parseInt(match[3], 10) : 0;
+  const years = match[4] ? parseInt(match[4], 10) : 0;
+  const months = match[5] ? parseInt(match[5], 10) : 0;
+  const days = match[6] ? parseInt(match[6], 10) : 0;
+  const hours = match[7] ? parseInt(match[7], 10) : 0;
+  const minutes = match[8] ? parseInt(match[8], 10) : 0;
+  const seconds = match[9] ? parseInt(match[9], 10) : 0;
+
+  // Approximate years and months (not precise, but good enough for display)
+  const totalSeconds = (weeks * 7 + years * 365 + months * 30 + days) * 86400 +
+    hours * 3600 + minutes * 60 + seconds;
+
+  return sign * totalSeconds;
 }

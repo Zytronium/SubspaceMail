@@ -9,7 +9,7 @@ import { clearAllFolderSyncStates, getAllFolderSyncStates } from "../db/folderSy
 import { ensureFreshToken } from "../oauth/oauthTokenManager";
 import { hasCalendarSupport, getCalendarProvider } from "../calendar/providerFactory";
 import { getVisibleCalendars, upsertCalendar, updateCalendarSyncToken } from "../db/calendars";
-import { upsertCalendarEvent, deleteEventByRemoteId } from "../db/calendarEvents";
+import { upsertCalendarEvent, deleteEventByRemoteId, getEventsByCalendarId } from "../db/calendarEvents";
 
 const SYNC_INTERVAL_MS = 60_000; // 60 seconds — delta syncs are lightweight (single API call when idle)
 
@@ -259,6 +259,26 @@ async function syncCalendarForAccount(accountId: string): Promise<void> {
         // Delete removed events
         for (const remoteId of syncResult.deletedRemoteIds) {
           await deleteEventByRemoteId(cal.id, remoteId);
+        }
+
+        // If the provider returned the set of remote URLs on the server,
+        // compare with local events to detect deletions (used by CalDAV sync)
+        if (syncResult.remoteUrlsOnServer && syncResult.remoteUrlsOnServer.length > 0) {
+          // Normalize URLs to just the last path segment (event filename/UUID) to avoid
+          // mismatches from URL encoding differences (e.g., %40 vs @) between
+          // create_event (string concatenation) and fetch_events (resolved from XML hrefs)
+          const serverUrlSuffixes = new Set(
+            syncResult.remoteUrlsOnServer.map(url => url.split("/").pop() ?? url),
+          );
+          const localEvents = await getEventsByCalendarId(cal.id);
+          for (const localEvent of localEvents) {
+            if (localEvent.remote_event_id) {
+              const localSuffix = localEvent.remote_event_id.split("/").pop() ?? localEvent.remote_event_id;
+              if (!serverUrlSuffixes.has(localSuffix)) {
+                await deleteEventByRemoteId(cal.id, localEvent.remote_event_id);
+              }
+            }
+          }
         }
 
         // Update sync token

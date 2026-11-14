@@ -202,8 +202,9 @@ describe("parseVEvent", () => {
 
     expect(result.isAllDay).toBe(true);
     expect(result.summary).toBe("Conference");
-    const expectedStart = Math.floor(new Date(2025, 6, 1).getTime() / 1000);
-    const expectedEnd = Math.floor(new Date(2025, 6, 3).getTime() / 1000);
+    // All-day dates are parsed as UTC to match the UTC day boundaries used in calendar views
+    const expectedStart = Math.floor(Date.UTC(2025, 6, 1) / 1000);
+    const expectedEnd = Math.floor(Date.UTC(2025, 6, 3) / 1000);
     expect(result.startTime).toBe(expectedStart);
     expect(result.endTime).toBe(expectedEnd);
   });
@@ -402,7 +403,7 @@ describe("parseVEvent", () => {
     expect(result.summary).toBe("Meeting at 10:30:00");
   });
 
-  it("parses non-UTC datetime (no Z suffix)", () => {
+  it("parses floating datetime (no Z suffix) as UTC", () => {
     const ical = [
       "BEGIN:VEVENT",
       "UID:local-1",
@@ -413,9 +414,27 @@ describe("parseVEvent", () => {
 
     const result = parseVEvent(ical);
 
-    // Local time -- new Date(2025, 5, 20, 14, 0, 0)
-    const expectedStart = Math.floor(new Date(2025, 5, 20, 14, 0, 0).getTime() / 1000);
-    const expectedEnd = Math.floor(new Date(2025, 5, 20, 15, 0, 0).getTime() / 1000);
+    // Floating times are treated as UTC for consistent filtering
+    const expectedStart = Math.floor(Date.UTC(2025, 5, 20, 14, 0, 0) / 1000);
+    const expectedEnd = Math.floor(Date.UTC(2025, 5, 20, 15, 0, 0) / 1000);
+    expect(result.startTime).toBe(expectedStart);
+    expect(result.endTime).toBe(expectedEnd);
+  });
+
+  it("parses datetime with timezone offset", () => {
+    const ical = [
+      "BEGIN:VEVENT",
+      "UID:tz-offset-1",
+      "DTSTART:20250620T140000+0530",
+      "DTEND:20250620T150000+0530",
+      "END:VEVENT",
+    ].join("\r\n");
+
+    const result = parseVEvent(ical);
+
+    // 14:00 +0530 = 08:30 UTC, 15:00 +0530 = 09:30 UTC
+    const expectedStart = Math.floor(Date.UTC(2025, 5, 20, 8, 30, 0) / 1000);
+    const expectedEnd = Math.floor(Date.UTC(2025, 5, 20, 9, 30, 0) / 1000);
     expect(result.startTime).toBe(expectedStart);
     expect(result.endTime).toBe(expectedEnd);
   });

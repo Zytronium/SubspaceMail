@@ -27,12 +27,22 @@ export function MonthView({ currentDate, events, onEventClick }: MonthViewProps)
   while (cells.length % 7 !== 0) cells.push(null);
 
   // Pre-bucket events by day (O(E×D) → O(E)) instead of filtering per cell
+  // Use UTC day boundaries to match the UTC timestamps stored from CalDAV
   const eventsByDay = useMemo(() => {
     const map = new Map<number, DbCalendarEvent[]>();
     for (let d = 1; d <= totalDays; d++) {
-      const dayStart = new Date(year, month, d).getTime() / 1000;
-      const dayEnd = new Date(year, month, d + 1).getTime() / 1000;
-      const dayEvents = events.filter((e) => e.start_time < dayEnd && e.end_time > dayStart);
+      const dayStart = Date.UTC(year, month, d) / 1000;
+      const dayEnd = Date.UTC(year, month, d + 1) / 1000;
+      // For all-day events, DTEND is exclusive per RFC 5545, so subtract 1s to avoid
+      // matching the next day's boundary (e.g., an event on Dec 16 has DTEND=Dec 17 00:00
+      // but should not appear on Dec 17).
+      const dayEvents = events.filter((e) => {
+        // For all-day events with a non-zero duration (RFC 5545 exclusive end),
+        // subtract 1s so the exclusive DTEND doesn't match the next day's boundary.
+        // For zero-duration all-day events (start === end), keep end_time as-is.
+        const end = e.is_all_day && e.end_time > e.start_time ? e.end_time - 1 : e.end_time;
+        return e.start_time < dayEnd && end >= dayStart;
+      });
       if (dayEvents.length > 0) map.set(d, dayEvents);
     }
     return map;

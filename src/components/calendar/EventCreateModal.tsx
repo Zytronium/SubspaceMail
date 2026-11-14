@@ -1,8 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { TextField } from "@/components/ui/TextField";
 import { Select } from "@/components/ui/Select";
+import { DateTimePicker } from "@/components/ui/DateTimePicker";
 import type { DbCalendar } from "@/services/db/calendars";
 
 interface EventCreateModalProps {
@@ -14,6 +15,7 @@ interface EventCreateModalProps {
     location: string;
     startTime: string;
     endTime: string;
+    isAllDay: boolean;
     calendarId?: string;
   }) => void;
 }
@@ -27,6 +29,19 @@ export function EventCreateModal({ calendars, onClose, onCreate }: EventCreateMo
   const [calendarId, setCalendarId] = useState<string>(
     calendars?.find((c) => c.is_primary)?.id ?? calendars?.[0]?.id ?? "",
   );
+  const [isAllDay, setIsAllDay] = useState(false);
+
+  // Track the delta between start and end times, so end shifts when start changes
+  const initialDelta = useMemo(() => {
+    return new Date(endTime).getTime() - new Date(startTime).getTime();
+  }, []);
+
+  useEffect(() => {
+    // When start time changes, adjust end time by the same delta
+    const newStart = new Date(startTime);
+    const newEnd = new Date(newStart.getTime() + initialDelta);
+    setEndTime(toLocalISOString(newEnd));
+  }, [startTime, initialDelta]);
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
@@ -37,9 +52,10 @@ export function EventCreateModal({ calendars, onClose, onCreate }: EventCreateMo
       location,
       startTime,
       endTime,
+      isAllDay,
       calendarId: calendarId || undefined,
     });
-  }, [summary, description, location, startTime, endTime, calendarId, onCreate]);
+  }, [summary, description, location, startTime, endTime, isAllDay, calendarId, onCreate]);
 
   return (
     <Modal isOpen={true} onClose={onClose} title="Create Event" width="w-full max-w-md">
@@ -68,18 +84,35 @@ export function EventCreateModal({ calendars, onClose, onCreate }: EventCreateMo
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
-          <TextField
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setIsAllDay(!isAllDay)}
+            className={`relative w-10 h-5 rounded-full transition-colors ${
+              isAllDay ? "bg-accent" : "bg-bg-tertiary border border-border-primary"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                isAllDay ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+          </button>
+          <span className="text-sm text-text-primary">All day</span>
+        </div>
+
+        <div className="space-y-3">
+          <DateTimePicker
             label="Start"
-            type="datetime-local"
             value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
+            onChange={setStartTime}
+            hideTime={isAllDay}
           />
-          <TextField
+          <DateTimePicker
             label="End"
-            type="datetime-local"
             value={endTime}
-            onChange={(e) => setEndTime(e.target.value)}
+            onChange={setEndTime}
+            hideTime={isAllDay}
           />
         </div>
 

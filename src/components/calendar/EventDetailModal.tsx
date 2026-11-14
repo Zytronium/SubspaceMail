@@ -1,8 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { MapPin, Clock, User, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { TextField } from "@/components/ui/TextField";
+import { DateTimePicker } from "@/components/ui/DateTimePicker";
 import type { DbCalendarEvent } from "@/services/db/calendarEvents";
 import type { DbCalendar } from "@/services/db/calendars";
 import { getCalendarProvider } from "@/services/calendar/providerFactory";
@@ -23,6 +24,20 @@ export function EventDetailModal({ event, calendars, accountId, onClose, onUpdat
   const [location, setLocation] = useState(event.location ?? "");
   const [startTime, setStartTime] = useState(toLocalISOString(new Date(event.start_time * 1000)));
   const [endTime, setEndTime] = useState(toLocalISOString(new Date(event.end_time * 1000)));
+  const [isAllDay, setIsAllDay] = useState(event.is_all_day === 1);
+
+  // Track the delta between start and end times, so end shifts when start changes
+  const initialDelta = useMemo(() => {
+    return new Date(endTime).getTime() - new Date(startTime).getTime();
+  }, []);
+
+  useEffect(() => {
+    // When start time changes, adjust end time by the same delta
+    const newStart = new Date(startTime);
+    const newEnd = new Date(newStart.getTime() + initialDelta);
+    setEndTime(toLocalISOString(newEnd));
+  }, [startTime, initialDelta]);
+
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -43,36 +58,44 @@ export function EventDetailModal({ event, calendars, accountId, onClose, onUpdat
         location: location || undefined,
         startTime: new Date(startTime).toISOString(),
         endTime: new Date(endTime).toISOString(),
+        isAllDay,
       }, event.etag ?? undefined);
 
+      setEditing(false);
       onUpdated();
     } catch (err) {
       console.error("Failed to update event:", err);
     } finally {
       setSaving(false);
     }
-  }, [accountId, calendar, event, summary, description, location, startTime, endTime, onUpdated]);
+  }, [accountId, calendar, event, summary, description, location, startTime, endTime, isAllDay, onUpdated]);
 
   const handleDelete = useCallback(async () => {
     setDeleting(true);
     try {
+      // Delete from the server first
       const provider = await getCalendarProvider(accountId);
       const calendarRemoteId = calendar?.remote_id ?? (provider.type === "google_api" ? "primary" : null);
-      if (!calendarRemoteId) throw new Error("No calendar available for this event");
-      const remoteEventId = event.remote_event_id ?? event.google_event_id;
-
-      await provider.deleteEvent(calendarRemoteId, remoteEventId, event.etag ?? undefined);
-
-      // Remove from local DB
-      await deleteCalendarEventDb(event.id);
-
-      onUpdated();
+      if (calendarRemoteId) {
+        const remoteEventId = event.remote_event_id ?? event.google_event_id;
+        await provider.deleteEvent(calendarRemoteId, remoteEventId, event.etag ?? undefined);
+      }
     } catch (err) {
-      console.error("Failed to delete event:", err);
+      console.error("Failed to delete event from server:", err);
+      // Continue with local delete even if server delete fails
     } finally {
       setDeleting(false);
     }
-  }, [accountId, calendar, event, onUpdated]);
+
+    // Always remove from local DB and refresh UI, regardless of server delete result
+    try {
+      await deleteCalendarEventDb(event.id);
+      onUpdated();
+      onClose();
+    } catch (err) {
+      console.error("Failed to remove event locally:", err);
+    }
+  }, [accountId, calendar, event, onUpdated, onClose]);
 
   const formatTime = (ts: number) => {
     return new Date(ts * 1000).toLocaleString(undefined, {
@@ -98,18 +121,35 @@ export function EventDetailModal({ event, calendars, accountId, onClose, onUpdat
             autoFocus
           />
 
-          <div className="grid grid-cols-2 gap-3">
-            <TextField
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsAllDay(!isAllDay)}
+              className={`relative w-10 h-5 rounded-full transition-colors ${
+                isAllDay ? "bg-accent" : "bg-bg-tertiary border border-border-primary"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                  isAllDay ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+            <span className="text-sm text-text-primary">All day</span>
+          </div>
+
+          <div className="space-y-3">
+            <DateTimePicker
               label="Start"
-              type="datetime-local"
               value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
+              onChange={setStartTime}
+              hideTime={isAllDay}
             />
-            <TextField
+            <DateTimePicker
               label="End"
-              type="datetime-local"
               value={endTime}
-              onChange={(e) => setEndTime(e.target.value)}
+              onChange={setEndTime}
+              hideTime={isAllDay}
             />
           </div>
 

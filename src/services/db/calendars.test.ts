@@ -260,7 +260,7 @@ describe("calendars service", () => {
   });
 
   describe("deduplicateCalendars", () => {
-    it("deletes duplicate calendars with the same normalized URL", async () => {
+    it("reassigns events and deletes duplicate calendars with the same normalized URL", async () => {
       const cals: DbCalendar[] = [
         makeCal({ id: "cal-1", remote_id: "https://mail.example.com/dav/cal/user/", created_at: 1000, is_primary: 1 }),
         makeCal({ id: "cal-2", remote_id: "https://mail.example.com/dav/cal/user", created_at: 2000, is_primary: 0 }),
@@ -270,10 +270,10 @@ describe("calendars service", () => {
       const deleted = await deduplicateCalendars("acc-1");
 
       expect(deleted).toBe(1);
-      // Should delete events and calendar for cal-2 (the duplicate)
+      // Should reassign events from cal-2 to cal-1, then delete cal-2
       expect(mockDb.execute).toHaveBeenCalledWith(
-        expect.stringContaining("DELETE FROM calendar_events"),
-        ["cal-2"],
+        expect.stringContaining("UPDATE calendar_events SET calendar_id"),
+        ["cal-1", "cal-2"],
       );
       expect(mockDb.execute).toHaveBeenCalledWith(
         expect.stringContaining("DELETE FROM calendars"),
@@ -291,7 +291,11 @@ describe("calendars service", () => {
       const deleted = await deduplicateCalendars("acc-1");
 
       expect(deleted).toBe(1);
-      // cal-2 is primary, so cal-1 should be deleted
+      // cal-2 is primary, so cal-1 should be deleted; events reassigned to cal-2
+      expect(mockDb.execute).toHaveBeenCalledWith(
+        expect.stringContaining("UPDATE calendar_events SET calendar_id"),
+        ["cal-2", "cal-1"],
+      );
       expect(mockDb.execute).toHaveBeenCalledWith(
         expect.stringContaining("DELETE FROM calendars"),
         ["cal-1"],
@@ -308,7 +312,11 @@ describe("calendars service", () => {
       const deleted = await deduplicateCalendars("acc-1");
 
       expect(deleted).toBe(1);
-      // cal-2 is older, so cal-1 should be deleted
+      // cal-2 is older, so cal-1 should be deleted; events reassigned to cal-2
+      expect(mockDb.execute).toHaveBeenCalledWith(
+        expect.stringContaining("UPDATE calendar_events SET calendar_id"),
+        ["cal-2", "cal-1"],
+      );
       expect(mockDb.execute).toHaveBeenCalledWith(
         expect.stringContaining("DELETE FROM calendars"),
         ["cal-1"],

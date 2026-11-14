@@ -130,10 +130,15 @@ export async function deduplicateCalendars(accountId: string): Promise<number> {
       return a.created_at - b.created_at;
     });
 
-    // Keep the first one, delete the rest (along with their events)
+    // Keep the first one, reassign its events from duplicates, then delete the duplicates
+    const keeper = group[0]!;
     const duplicates = group.slice(1);
     for (const dup of duplicates) {
-      await db.execute("DELETE FROM calendar_events WHERE calendar_id = $1", [dup.id]);
+      // Reassign events from the duplicate calendar to the keeper
+      await db.execute(
+        "UPDATE calendar_events SET calendar_id = $1 WHERE calendar_id = $2",
+        [keeper.id, dup.id],
+      );
       await db.execute("DELETE FROM calendars WHERE id = $1", [dup.id]);
       deletedCount++;
     }

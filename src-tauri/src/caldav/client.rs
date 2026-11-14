@@ -25,9 +25,23 @@ fn report_method() -> Method {
 /// Convert ISO 8601 timestamp (e.g., "2024-01-01T00:00:00Z") to iCalendar format
 /// (e.g., "20240101T000000Z") as required by RFC 4791 Section 9.9
 fn to_ical_timestamp(ts: &str) -> String {
-    // Remove all dashes and colons from the timestamp
-    // Input: "2024-01-01T00:00:00Z" -> Output: "20240101T000000Z"
-    ts.replace(['-', ':'], "")
+    // Remove dashes and colons from the timestamp first
+    // Input: "2024-01-01T00:00:00.000Z" -> "20240101T000000.000Z"
+    // Input: "2024-01-01T00:00:00+05:30" -> "20240101T000000+0530"
+    let without_seps: String = ts.replace(['-', ':'], "");
+
+    // Handle milliseconds — remove them before the timezone suffix
+    // After removing dashes/colons, milliseconds look like ".000Z" or ".000+0530"
+    if let Some(dot_pos) = without_seps.find('.') {
+        let after_dot = &without_seps[dot_pos..];
+        // Find the timezone suffix: 'Z' or '+'/'-' followed by digits
+        let tz_start = after_dot.find(|c: char| c == 'Z' || (c == '+' && dot_pos + 1 < without_seps.len()) || (c == '-' && dot_pos + 1 < without_seps.len()))
+            .unwrap_or(after_dot.len());
+        let tz_suffix = &after_dot[tz_start..];
+        return format!("{}{}{}", &without_seps[..dot_pos], "", tz_suffix);
+    }
+
+    without_seps
 }
 
 /// Discover the CalDAV root URL via /.well-known/caldav

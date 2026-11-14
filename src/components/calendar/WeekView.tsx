@@ -11,13 +11,14 @@ const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export function WeekView({ currentDate, events, onEventClick }: WeekViewProps) {
-  const weekStart = new Date(currentDate);
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-  weekStart.setHours(0, 0, 0, 0);
+  // Use UTC week start to match the UTC timestamps stored from CalDAV
+  const weekStart = new Date(Date.UTC(
+    currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate()
+  ));
+  weekStart.setUTCDate(weekStart.getUTCDate() - weekStart.getUTCDay());
 
   const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(weekStart);
-    d.setDate(d.getDate() + i);
+    const d = new Date(weekStart.getTime() + i * 86400000);
     return d;
   });
 
@@ -35,8 +36,12 @@ export function WeekView({ currentDate, events, onEventClick }: WeekViewProps) {
 
       for (const e of events) {
         if (e.is_all_day) {
+          // For all-day events with a non-zero duration (RFC 5545 exclusive end),
+          // subtract 1s so the exclusive DTEND doesn't match the next day's boundary.
+          // For zero-duration all-day events (start === end), keep end_time as-is.
+          const end = e.end_time > e.start_time ? e.end_time - 1 : e.end_time;
           const dayEnd = dayTs + 86400;
-          if (e.start_time < dayEnd && e.end_time > dayTs) {
+          if (e.start_time < dayEnd && end >= dayTs) {
             const list = adMap.get(dayKey);
             if (list) list.push(e);
             else adMap.set(dayKey, [e]);
@@ -45,7 +50,7 @@ export function WeekView({ currentDate, events, onEventClick }: WeekViewProps) {
           for (const hour of HOURS) {
             const hStart = dayTs + hour * 3600;
             const hEnd = hStart + 3600;
-            if (e.start_time < hEnd && e.end_time > hStart) {
+            if (e.start_time < hEnd && e.end_time >= hStart) {
               const key = `${dayKey}-${hour}`;
               const list = dhMap.get(key);
               if (list) list.push(e);

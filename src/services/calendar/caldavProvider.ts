@@ -189,6 +189,21 @@ export class CalDAVProvider implements CalendarProvider {
         etag: etag ?? null,
       });
     } catch (err) {
+      // If delete failed with an etag (likely 412 Precondition Failed due to stale etag),
+      // retry without the etag to force-delete
+      if (etag) {
+        try {
+          await invoke("caldav_delete_event", {
+            config,
+            event_url: remoteEventId,
+            etag: null,
+          });
+          return;
+        } catch (retryErr) {
+          const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+          throw new Error(`Failed to delete event (retry without etag): ${retryMsg}`);
+        }
+      }
       const msg = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to delete event: ${msg}`);
     }
@@ -199,8 +214,9 @@ export class CalDAVProvider implements CalendarProvider {
     const created: CalendarEventData[] = [];
 
     const now = new Date();
+    // Fetch a wider range to catch events that may have been created outside the narrow window
     const timeMin = new Date(now);
-    timeMin.setDate(timeMin.getDate() - 90);
+    timeMin.setFullYear(timeMin.getFullYear() - 1);
     const timeMax = new Date(now);
     timeMax.setFullYear(timeMax.getFullYear() + 1);
 
@@ -217,15 +233,21 @@ export class CalDAVProvider implements CalendarProvider {
       throw new Error(`Failed to sync events: ${msg}`);
     }
 
+    // Build a set of remote event URLs that exist on the server
+    const remoteUrlsOnServer = new Set<string>();
     for (const ev of events) {
       if (ev.ical_data) {
         const event = parseVEvent(ev.ical_data, ev.url);
         event.etag = ev.etag ?? null;
         created.push(event);
+        remoteUrlsOnServer.add(ev.url);
       }
     }
 
-    return { created, updated: [], deletedRemoteIds: [], newSyncToken: null, newCtag: null };
+    // Return the set of remote URLs so the sync manager can detect deletions
+    // by comparing with local events. The deletedRemoteIds will be populated
+    // by the sync manager using getEventsByCalendarId.
+    return { created, updated: [], deletedRemoteIds: [], newSyncToken: null, newCtag: null, remoteUrlsOnServer: [...remoteUrlsOnServer] };
   }
 
   async testConnection(): Promise<{ success: boolean; message: string }> {
