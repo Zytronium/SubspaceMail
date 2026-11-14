@@ -39,10 +39,3 @@ jobs:
       tag_name: ${{ needs.release-please.outputs.tag_name }}
     secrets: inherit
 
-  update-homebrew:
-    needs: [release-please, build-and-release]
-    if: needs.release-please.outputs.release_created == 'true'
-    uses: ./.github/workflows/update-homebrew.yml
-    with:
-      tag_name: ${{ needs.release-please.outputs.tag_name }}
-    secrets: inherit

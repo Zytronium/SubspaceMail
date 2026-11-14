@@ -12,6 +12,7 @@
 - [ ] Refactor (no behavior change)
 - [ ] Documentation
 - [ ] CI/Build
+- [ ] Other
 
 ## Testing
 - [ ] Existing tests pass (`npm run test`)

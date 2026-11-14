@@ -219,7 +219,7 @@ jobs:
 
             > **macOS users**: This build is unsigned. After downloading, run:
             > ```
-            > xattr -cr "/Applications/Subspace Mail.app"
+            > xattr -cr /Applications/SubspaceMail.app
             > ```
             > Or right-click the app and select "Open" on first launch.
           releaseDraft: false

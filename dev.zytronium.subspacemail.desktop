@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=Subspace Mail
-Comment=Fast, beautiful desktop email client
+Comment=Fast, beautiful, and private desktop email client
 Exec=subspacemail
 Icon=dev.zytronium.subspacemail
 Type=Application
