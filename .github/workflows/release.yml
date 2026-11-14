@@ -75,12 +75,13 @@ jobs:
       - run: npm ci
 
       - name: Write signing key to file
-        if: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
         shell: bash
         run: |
-          mkdir -p ~/.tauri
-          printf '%s' "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" > ~/.tauri/subspacemail.key
-          echo "TAURI_SIGNING_PRIVATE_KEY=$HOME/.tauri/subspacemail.key" >> "$GITHUB_ENV"
+          if [ -n "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" ]; then
+            mkdir -p ~/.tauri
+            printf '%s' "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" > ~/.tauri/subspacemail.key
+            echo "TAURI_SIGNING_PRIVATE_KEY=$HOME/.tauri/subspacemail.key" >> "$GITHUB_ENV"
+          fi
 
       - name: Build and upload to existing release
         if: inputs.release_id
@@ -132,12 +133,13 @@ jobs:
       - run: npm ci
 
       - name: Write signing key to file
-        if: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
         shell: bash
         run: |
-          mkdir -p ~/.tauri
-          printf '%s' "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" > ~/.tauri/subspacemail.key
-          echo "TAURI_SIGNING_PRIVATE_KEY=$HOME/.tauri/subspacemail.key" >> "$GITHUB_ENV"
+          if [ -n "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" ]; then
+            mkdir -p ~/.tauri
+            printf '%s' "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" > ~/.tauri/subspacemail.key
+            echo "TAURI_SIGNING_PRIVATE_KEY=$HOME/.tauri/subspacemail.key" >> "$GITHUB_ENV"
+          fi
 
       - name: Check if Apple signing is configured
         id: signing-check
