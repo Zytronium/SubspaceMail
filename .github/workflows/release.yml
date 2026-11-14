@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       tag_name:
-        description: "Release tag (e.g. velo-v0.4.3)"
+        description: "Release tag (e.g. subspacemail-v0.4.3)"
         type: string
         required: false
       release_id:
@@ -97,7 +97,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: v__VERSION__
-          releaseName: "Velo v__VERSION__"
+          releaseName: "Subspace Mail v__VERSION__"
           releaseBody: "See the assets below to download for your platform."
           releaseDraft: false
           prerelease: false
@@ -185,7 +185,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: v__VERSION__
-          releaseName: "Velo v__VERSION__"
+          releaseName: "Subspace Mail v__VERSION__"
           releaseBody: "See the assets below to download for your platform."
           releaseDraft: false
           prerelease: false
@@ -213,13 +213,13 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: v__VERSION__
-          releaseName: "Velo v__VERSION__"
+          releaseName: "Subspace Mail v__VERSION__"
           releaseBody: |
             See the assets below to download for your platform.
 
             > **macOS users**: This build is unsigned. After downloading, run:
             > ```
-            > xattr -cr /Applications/Velo.app
+            > xattr -cr "/Applications/Subspace Mail.app"
             > ```
             > Or right-click the app and select "Open" on first launch.
           releaseDraft: false

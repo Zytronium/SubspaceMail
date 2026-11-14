@@ -46,6 +46,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -65,7 +66,7 @@
       ]
     },
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM0NjlFREYzMjVBRDYwRjMKUldUellLMGw4KzFwTkJ4RmJ0ejArWUNTZTEzT01SMnJveHc4K3ErNHVIdEVuYmZmYW94U295QzcK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlDOUYzMDkxQjBEQjFFQkMKUldTOEh0dXdrVENmbkVlSmMvR3FPVThLcldYQTdUOTNMc3hOM0RlQkU1eUNCZVhnUWtZN3RTbG4K",
       "endpoints": [
         "https://github.com/Zytronium/SubspaceMail/releases/latest/download/latest.json"
       ]
