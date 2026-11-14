@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.22](https://github.com/Zytronium/SubspaceMail/compare/velo-v0.4.21...velo-v0.4.22) (2026-11-14)
+
+
+### Bug Fixes
+
+* fix tests and github CI/CD ([1154903](https://github.com/Zytronium/SubspaceMail/commit/1154903a60cdfebb047701b48828a07b50c7f3ca))
+* release correct version number ([9cf1df5](https://github.com/Zytronium/SubspaceMail/commit/9cf1df54c9bfa78108e90f957337001c1bddc91e))
+
 ## [0.4.21](https://github.com/Zytronium/SubspaceMail/compare/velo-v0.4.21...velo-v0.4.21) (2026-11-14)
 
 
