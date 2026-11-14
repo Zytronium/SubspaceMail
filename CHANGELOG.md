@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.24](https://github.com/Zytronium/SubspaceMail/compare/velo-v0.4.23...velo-v0.4.24) (2026-11-14)
+
+
+### Bug Fixes
+
+* auto updater doesn't work ([07043e3](https://github.com/Zytronium/SubspaceMail/commit/07043e34efbc0ba9c1dfad0347f931ec69d51e30))
+* fix public key signing "wrong password" false alarm ([84e1b06](https://github.com/Zytronium/SubspaceMail/commit/84e1b067f80d9e7313201fee282992a1242ec18a))
+* fix public key signing "wrong password" false alarm again ([4fc1202](https://github.com/Zytronium/SubspaceMail/commit/4fc1202af38e0e8cc5d1fca4f0683f4975256ebd))
+* fix windows build and pin version back to correct version 0.4.22 ([7fda62a](https://github.com/Zytronium/SubspaceMail/commit/7fda62a602dbba05f6ae4f5d4bc248f868dbff3c))
+* IMAP sync is slow sometimes due to failing to load and falling back to raw TCP fetch and emails periodically all disappear and reappear ([93306b5](https://github.com/Zytronium/SubspaceMail/commit/93306b5eafb38314132445fc74aa68a28196889b))
+* remove native title bar that shows in addition to custom title bar ([997f207](https://github.com/Zytronium/SubspaceMail/commit/997f207bfe2be63d46c5d39f792261f04a76daee))
+* remove release trigger that caused builds without release_id and pin version at 0.4.22 ([47f3d5e](https://github.com/Zytronium/SubspaceMail/commit/47f3d5ec0d52e31725dd53aad1f2a8a3743023a3))
+* update public key again to fix releases not working ([32d452b](https://github.com/Zytronium/SubspaceMail/commit/32d452bfc06b7755f443c5be1f1b44b10ae56c50))
+* update public signing key for updater ([92fc26f](https://github.com/Zytronium/SubspaceMail/commit/92fc26f9822023449066f87d0abf7c1a65ffd5cb))
+
 ## [0.4.23](https://github.com/Zytronium/SubspaceMail/compare/velo-v0.4.22...velo-v0.4.23) (2026-11-14)
 
 
