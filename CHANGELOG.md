@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.22](https://github.com/Zytronium/SubspaceMail/compare/velo-v0.4.23...velo-v0.4.22) (2026-11-14)
+
+
+### Bug Fixes
+
+* remove release trigger that caused builds without release_id and pin version at 0.4.22 ([47f3d5e](https://github.com/Zytronium/SubspaceMail/commit/47f3d5ec0d52e31725dd53aad1f2a8a3743023a3))
+
 ## [0.4.23](https://github.com/Zytronium/SubspaceMail/compare/velo-v0.4.22...velo-v0.4.23) (2026-11-14)
 
 
