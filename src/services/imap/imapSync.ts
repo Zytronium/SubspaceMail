@@ -17,7 +17,7 @@ import {
 import type { ParsedMessage, ParsedAttachment } from "../gmail/messageParser";
 import type { SyncResult } from "../email/types";
 import { batchUpsertMessages, updateMessageThreadIds, type UpsertMessageInput } from "../db/messages";
-import { batchUpsertThreads, setThreadLabels, deleteThread, type UpsertThreadInput } from "../db/threads";
+import { batchUpsertThreads, setThreadLabels, addThreadLabels, getThreadsByIds, deleteThread, type UpsertThreadInput } from "../db/threads";
 import { batchUpsertAttachments, type UpsertAttachmentInput } from "../db/attachments";
 import { getAccount, updateAccountSyncState } from "../db/accounts";
 import {
@@ -199,6 +199,10 @@ export function imapMessageToParsedMessage(
 
 /**
  * Store threads and their messages into the local DB.
+ *
+ * When `isDeltaSync` is true, the function checks which threads already exist
+ * and merges their labels instead of replacing them, preventing threads from
+ * disappearing from folders when a new message arrives in only one folder.
  */
 async function storeThreadsAndMessages(
   accountId: string,
@@ -206,6 +210,7 @@ async function storeThreadsAndMessages(
   parsedByLocalId: Map<string, ParsedMessage>,
   imapMsgByLocalId: Map<string, ImapMessage>,
   labelsByRfcId?: Map<string, Set<string>>,
+  isDeltaSync = false,
 ): Promise<ParsedMessage[]> {
   const storedMessages: ParsedMessage[] = [];
 
@@ -219,9 +224,15 @@ async function storeThreadsAndMessages(
     }
   }
 
+  // For delta sync, check which threads already exist so we can merge labels
+  // instead of replacing them (which would cause threads to disappear from folders).
+  const existingThreads = isDeltaSync
+    ? await getThreadsByIds(accountId, threadGroups.map((g) => g.threadId))
+    : new Map();
+
   // Build all thread, message, and attachment inputs
   const threadInputs: UpsertThreadInput[] = [];
-  const labelUpdates: { threadId: string; labelIds: string[] }[] = [];
+  const labelUpdates: { threadId: string; labelIds: string[]; merge: boolean }[] = [];
   const msgInputs: UpsertMessageInput[] = [];
   const attInputs: UpsertAttachmentInput[] = [];
 
@@ -267,20 +278,40 @@ async function storeThreadsAndMessages(
     const isStarred = messages.some((m) => m.isStarred);
     const hasAttachments = messages.some((m) => m.hasAttachments);
 
-    threadInputs.push({
-      id: group.threadId,
-      accountId,
-      subject: firstMessage.subject,
-      snippet: lastMessage.snippet,
-      lastMessageAt: lastMessage.date,
-      messageCount: messages.length,
-      isRead,
-      isStarred,
-      isImportant: false,
-      hasAttachments,
-    });
-
-    labelUpdates.push({ threadId: group.threadId, labelIds: [...allLabelIds] });
+    const existingThread = existingThreads.get(group.threadId);
+    if (existingThread) {
+      // Thread already exists — update metadata but preserve message_count
+      // by adding the new message count to the existing count.
+      threadInputs.push({
+        id: group.threadId,
+        accountId,
+        subject: firstMessage.subject,
+        snippet: lastMessage.snippet,
+        lastMessageAt: lastMessage.date,
+        messageCount: existingThread.message_count + messages.length,
+        isRead,
+        isStarred,
+        isImportant: false,
+        hasAttachments,
+      });
+      // Merge labels instead of replacing — prevents threads from disappearing
+      // when a new message arrives in only one folder of a cross-folder thread.
+      labelUpdates.push({ threadId: group.threadId, labelIds: [...allLabelIds], merge: true });
+    } else {
+      threadInputs.push({
+        id: group.threadId,
+        accountId,
+        subject: firstMessage.subject,
+        snippet: lastMessage.snippet,
+        lastMessageAt: lastMessage.date,
+        messageCount: messages.length,
+        isRead,
+        isStarred,
+        isImportant: false,
+        hasAttachments,
+      });
+      labelUpdates.push({ threadId: group.threadId, labelIds: [...allLabelIds], merge: false });
+    }
 
     for (const parsed of messages) {
       const imapMsg = imapMsgByLocalId.get(parsed.id);
@@ -347,8 +378,13 @@ async function storeThreadsAndMessages(
   }
 
   // Set labels (per-thread operation)
+  // For existing threads during delta sync, merge labels instead of replacing them.
   for (const lu of labelUpdates) {
-    await setThreadLabels(accountId, lu.threadId, lu.labelIds);
+    if (lu.merge) {
+      await addThreadLabels(accountId, lu.threadId, lu.labelIds);
+    } else {
+      await setThreadLabels(accountId, lu.threadId, lu.labelIds);
+    }
   }
 
   return storedMessages;
@@ -1081,13 +1117,15 @@ export async function imapDeltaSync(accountId: string, daysBack = 365): Promise<
   // Thread the new messages
   const threadGroups = buildThreads(allThreadable);
 
-  // Store in DB
+  // Store in DB — pass isDeltaSync=true so existing threads have their
+  // labels merged instead of replaced, preventing threads from disappearing.
   const storedMessages = await storeThreadsAndMessages(
     accountId,
     threadGroups,
     allParsed,
     allImapMsgs,
     labelsByRfcId,
+    true,
   );
 
   // Update sync state timestamp

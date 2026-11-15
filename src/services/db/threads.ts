@@ -199,6 +199,26 @@ export async function setThreadLabels(
   }
 }
 
+/**
+ * Add labels to a thread without removing existing labels.
+ * Used during delta sync to merge folder labels when a new message
+ * arrives in only one folder of a cross-folder thread.
+ */
+export async function addThreadLabels(
+  accountId: string,
+  threadId: string,
+  labelIds: string[],
+): Promise<void> {
+  if (labelIds.length === 0) return;
+  const db = await getDb();
+  for (const labelId of labelIds) {
+    await db.execute(
+      "INSERT OR IGNORE INTO thread_labels (account_id, thread_id, label_id) VALUES ($1, $2, $3)",
+      [accountId, threadId, labelId],
+    );
+  }
+}
+
 export async function getThreadLabelIds(
   accountId: string,
   threadId: string,
@@ -225,6 +245,28 @@ export async function getThreadById(
     [accountId, threadId],
   );
   return rows[0];
+}
+
+/**
+ * Get multiple threads by ID in a single query.
+ * Returns a map of threadId -> DbThread for threads that exist.
+ */
+export async function getThreadsByIds(
+  accountId: string,
+  threadIds: string[],
+): Promise<Map<string, DbThread>> {
+  if (threadIds.length === 0) return new Map();
+  const db = await getDb();
+  const placeholders = threadIds.map((_, i) => `$${i + 2}`).join(", ");
+  const rows = await db.select<DbThread[]>(
+    `SELECT t.* FROM threads t WHERE t.account_id = $1 AND t.id IN (${placeholders})`,
+    [accountId, ...threadIds],
+  );
+  const map = new Map<string, DbThread>();
+  for (const row of rows) {
+    map.set(row.id, row);
+  }
+  return map;
 }
 
 export async function getThreadCountForAccount(accountId: string): Promise<number> {
