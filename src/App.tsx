@@ -65,6 +65,8 @@ import { TitleBar } from "./components/layout/TitleBar";
 import { useShortcutStore } from "./stores/shortcutStore";
 import { getIncompleteTaskCount } from "./services/db/tasks";
 import { useTaskStore } from "./stores/taskStore";
+import { useDemoStore, detectDemoMode } from "./stores/demoStore";
+import { generateDemoAccounts, generateDemoThreads } from "./utils/demoData";
 import { ContextMenuPortal } from "./components/ui/ContextMenuPortal";
 import { MoveToFolderDialog } from "./components/email/MoveToFolderDialog";
 import { OfflineBanner } from "./components/ui/OfflineBanner";
@@ -185,12 +187,33 @@ export default function App() {
     return () => { unlisten?.(); };
   }, []);
 
+  // Detect demo mode early
+  const isDemoMode = detectDemoMode();
+  useDemoStore.getState().setDemoMode(isDemoMode);
+
   // Initialize database, load accounts, start sync
   // Two-phase init: Phase 1 shows the UI immediately with cached data from SQLite.
   // Phase 2 runs non-blocking background tasks (Gmail clients, send-as aliases, sync).
+  // In demo mode, skip all real data and load fake accounts + threads instead.
   useEffect(() => {
     async function initPhase1() {
       try {
+        // --- DEMO MODE: Load fake data and skip all real initialization ---
+        if (isDemoMode) {
+          const demoAccounts = generateDemoAccounts();
+          useAccountStore.getState().setAccounts(demoAccounts);
+
+          // Pre-load demo threads for the first account
+          const demoThreads = generateDemoThreads(demoAccounts[0]!.id);
+          useThreadStore.getState().setThreads(demoThreads);
+
+          // Show the UI immediately with demo data
+          setInitialized(true);
+          invoke("close_splashscreen").catch(() => {});
+          return;
+        }
+
+        // --- NORMAL MODE: Real data initialization ---
         await runMigrations();
 
         const ui = useUIStore.getState();

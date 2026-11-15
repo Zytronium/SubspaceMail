@@ -8,6 +8,8 @@ import { Select } from "../ui/Select";
 import { useThreadStore, type Thread } from "@/stores/threadStore";
 import { useAccountStore } from "@/stores/accountStore";
 import { useUIStore } from "@/stores/uiStore";
+import { useDemoStore } from "@/stores/demoStore";
+import { generateDemoThreads, isDemoAccountId } from "@/utils/demoData";
 import { useActiveLabel, useSelectedThreadId, useActiveCategory, useRouteAccountId } from "@/hooks/useRouteNavigation";
 import { navigateToThread, navigateToLabel } from "@/router/navigate";
 import { getThreadsForAccount, getThreadsForCategory, getThreadsForAllAccounts, getThreadLabelIds, deleteThread as deleteThreadFromDb } from "@/services/db/threads";
@@ -57,6 +59,7 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
   const selectAll = useThreadStore((s) => s.selectAll);
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
   const accounts = useAccountStore((s) => s.accounts);
+  const isDemoMode = useDemoStore((s) => s.isDemoMode);
   const activeLabel = useActiveLabel();
   const readFilter = useUIStore((s) => s.readFilter);
   const setReadFilter = useUIStore((s) => s.setReadFilter);
@@ -291,6 +294,25 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
       return;
     }
 
+    // --- DEMO MODE: Load fake threads instead of querying DB ---
+    if (isDemoMode && isDemoAccountId(resolvedAccountId)) {
+      const folderKey = `${resolvedAccountId}|${activeLabel}|${activeCategory}`;
+      const cachedForFolder = cachedThreadsByFolderRef.current.get(folderKey);
+      if (cachedForFolder && cachedForFolder.length > 0) {
+        setThreads(cachedForFolder);
+        setHasMore(false);
+        setLoading(false);
+        return;
+      }
+      const demoThreads = generateDemoThreads(resolvedAccountId);
+      cachedThreadsByFolderRef.current.set(folderKey, demoThreads);
+      setThreads(demoThreads);
+      setHasMore(false);
+      setLoading(false);
+      clearSearch();
+      return;
+    }
+
     // Increment generation to invalidate any in-flight loads from previous calls
     const gen = ++loadGenRef.current;
 
@@ -370,7 +392,7 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
     };
 
     doLoad();
-  }, [routeAccountId, activeAccountId, activeLabel, activeCategory, isSmartFolder, activeSmartFolder, isCombinedMode, isSpecificAccountView, combinedAccountIds, setThreads, setLoading, mapDbThreads, clearSearch, syncRefreshCounter]);
+  }, [isDemoMode, routeAccountId, activeAccountId, activeLabel, activeCategory, isSmartFolder, activeSmartFolder, isCombinedMode, isSpecificAccountView, combinedAccountIds, setThreads, setLoading, mapDbThreads, clearSearch, syncRefreshCounter]);
 
   // Load more threads - stable callback for scroll handler
   const loadMore = useCallback(async () => {

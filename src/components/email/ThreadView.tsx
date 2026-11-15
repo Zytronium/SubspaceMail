@@ -10,6 +10,8 @@ import { useContextMenuStore } from "@/stores/contextMenuStore";
 import { markThreadRead } from "@/services/emailActions";
 import { getSetting } from "@/services/db/settings";
 import { getAllowlistedSenders } from "@/services/db/imageAllowlist";
+import { useDemoStore } from "@/stores/demoStore";
+import { isDemoThreadId, generateDemoEmailBody } from "@/utils/demoData";
 import { VolumeX } from "lucide-react";
 import { escapeHtml, sanitizeHtml } from "@/utils/sanitize";
 import { isNoReplyAddress } from "@/utils/noReply";
@@ -70,6 +72,7 @@ export function ThreadView({ thread }: ThreadViewProps) {
   // null = not yet loaded; defer iframe rendering until setting is known
   const [blockImages, setBlockImages] = useState<boolean | null>(null);
   const [allowlistedSenders, setAllowlistedSenders] = useState<Set<string>>(new Set());
+  const isDemoMode = useDemoStore((s) => s.isDemoMode);
 
   // Preload settings eagerly on mount (parallel with message loading)
   useEffect(() => {
@@ -79,12 +82,50 @@ export function ThreadView({ thread }: ThreadViewProps) {
   // Load messages
   useEffect(() => {
     if (!activeAccountId) return;
+
+    // --- DEMO MODE: Show fake message instead of querying DB ---
+    if (isDemoMode && isDemoThreadId(thread.id)) {
+      const demoBody = generateDemoEmailBody(thread.id);
+      const demoMessage: DbMessage = {
+        id: thread.id + "-msg-0",
+        account_id: thread.accountId,
+        thread_id: thread.id,
+        from_address: thread.fromAddress ?? "unknown@example.com",
+        from_name: thread.fromName ?? "Unknown Sender",
+        to_addresses: "me@example.com",
+        cc_addresses: null,
+        bcc_addresses: null,
+        reply_to: null,
+        subject: thread.subject ?? null,
+        snippet: thread.snippet ?? null,
+        date: thread.lastMessageAt,
+        is_read: thread.isRead ? 1 : 0,
+        is_starred: thread.isStarred ? 1 : 0,
+        body_html: demoBody,
+        body_text: thread.snippet ?? null,
+        body_cached: 1,
+        raw_size: demoBody.length,
+        internal_date: thread.lastMessageAt,
+        list_unsubscribe: null,
+        list_unsubscribe_post: null,
+        auth_results: null,
+        message_id_header: `<demo-${thread.id}@example.com>`,
+        references_header: null,
+        in_reply_to_header: null,
+        imap_uid: null,
+        imap_folder: null,
+      };
+      setMessages([demoMessage]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     getMessagesForThread(activeAccountId, thread.id)
       .then(setMessages)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [activeAccountId, thread.id]);
+  }, [activeAccountId, thread.id, isDemoMode, thread]);
 
   // Check per-sender allowlist (single batch query instead of N queries)
   useEffect(() => {

@@ -7,6 +7,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { useComposerStore } from "@/stores/composerStore";
 import { useAccountStore } from "@/stores/accountStore";
 import { useLabelStore, type Label } from "@/stores/labelStore";
+import { useDemoStore } from "@/stores/demoStore";
 import { useContextMenuStore } from "@/stores/contextMenuStore";
 import { useSmartFolderStore } from "@/stores/smartFolderStore";
 import { useActiveLabel, useActiveCategory } from "@/hooks/useRouteNavigation";
@@ -225,6 +226,7 @@ export function Sidebar({ collapsed, onAddAccount }: SidebarProps) {
   const loadSmartFolders = useSmartFolderStore((s) => s.loadFolders);
   const refreshSmartFolderCounts = useSmartFolderStore((s) => s.refreshUnreadCounts);
   const createSmartFolder = useSmartFolderStore((s) => s.createFolder);
+  const isDemoMode = useDemoStore((s) => s.isDemoMode);
   const SECTION_IDS = new Set(["smart-folders", "labels"]);
 
   // Combined mode: show account-grouped collapsible sections
@@ -299,20 +301,22 @@ export function Sidebar({ collapsed, onAddAccount }: SidebarProps) {
     openMenu("sidebarNav", { x: e.clientX, y: e.clientY }, { navId });
   }, [openMenu]);
 
-  // Load labels when active account changes
+  // Load labels when active account changes (skip in demo mode)
   useEffect(() => {
-    if (activeAccountId) {
+    if (activeAccountId && !isDemoMode) {
       loadLabels(activeAccountId);
     }
-  }, [activeAccountId, loadLabels]);
+  }, [activeAccountId, loadLabels, isDemoMode]);
 
-  // Load smart folders when active account changes
+  // Load smart folders when active account changes (skip in demo mode)
   useEffect(() => {
-    loadSmartFolders(activeAccountId ?? undefined);
-    if (activeAccountId) {
-      refreshSmartFolderCounts(activeAccountId);
+    if (!isDemoMode) {
+      loadSmartFolders(activeAccountId ?? undefined);
+      if (activeAccountId) {
+        refreshSmartFolderCounts(activeAccountId);
+      }
     }
-  }, [activeAccountId, loadSmartFolders, refreshSmartFolderCounts]);
+  }, [activeAccountId, loadSmartFolders, refreshSmartFolderCounts, isDemoMode]);
 
   // Reload labels and smart folder counts on sync completion (debounced to avoid waterfall from multiple emitters)
   useEffect(() => {
@@ -320,7 +324,7 @@ export function Sidebar({ collapsed, onAddAccount }: SidebarProps) {
     const handler = () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
-        if (activeAccountId) {
+        if (activeAccountId && !isDemoMode) {
           loadLabels(activeAccountId);
           refreshSmartFolderCounts(activeAccountId);
         }
@@ -332,7 +336,7 @@ export function Sidebar({ collapsed, onAddAccount }: SidebarProps) {
       window.removeEventListener("subspacemail-sync-done", handler);
       if (timer) clearTimeout(timer);
     };
-  }, [activeAccountId, loadLabels, refreshSmartFolderCounts]);
+  }, [activeAccountId, loadLabels, refreshSmartFolderCounts, isDemoMode]);
 
   const handleDeleteLabel = useCallback(async (labelId: string) => {
     if (!activeAccountId) return;
