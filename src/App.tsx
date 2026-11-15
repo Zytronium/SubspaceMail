@@ -186,8 +186,10 @@ export default function App() {
   }, []);
 
   // Initialize database, load accounts, start sync
+  // Two-phase init: Phase 1 shows the UI immediately with cached data from SQLite.
+  // Phase 2 runs non-blocking background tasks (Gmail clients, send-as aliases, sync).
   useEffect(() => {
-    async function init() {
+    async function initPhase1() {
       try {
         await runMigrations();
 
@@ -314,33 +316,58 @@ export default function App() {
         const savedAccountId = await getSetting("active_account_id");
         useAccountStore.getState().setAccounts(mapped, savedAccountId);
 
-        // Initialize Gmail clients for existing accounts
-        await initializeClients();
-
-        // Fetch send-as aliases for each active email account (skip CalDAV-only)
-        const activeIds = mapped.filter((a) => a.isActive).map((a) => a.id);
-        const emailAccountIds = mapped.filter((a) => a.isActive && a.provider !== "caldav").map((a) => a.id);
-        for (const accountId of emailAccountIds) {
-          try {
-            const client = await getGmailClient(accountId);
-            await fetchSendAsAliases(client, accountId);
-          } catch (err) {
-            console.warn(`Failed to fetch send-as aliases for ${accountId}:`, err);
-          }
-        }
-
-        // Start background sync for active accounts
-        if (activeIds.length > 0) {
-          startBackgroundSync(activeIds);
-        }
-
-        // Start snooze, scheduled send, follow-up, bundle, and queue checkers
+        // Start background services that don't require network
         startSnoozeChecker();
         startScheduledSendChecker();
         startFollowUpChecker();
         startBundleChecker();
         startQueueProcessor();
         startPreCacheManager();
+        startUpdateChecker();
+
+        // Show the UI immediately — it will display cached data from SQLite.
+        // The background sync will refresh it when new data arrives.
+        setInitialized(true);
+        invoke("close_splashscreen").catch(() => {});
+
+        // Phase 2: Run non-blocking background tasks.
+        // These tasks (Gmail client init, send-as aliases, sync) should not block
+        // the UI from showing cached data to the user.
+        initPhase2(mapped, savedAccountId).catch((err) => {
+          console.error("Failed to initialize background services:", err);
+        });
+      } catch (err) {
+        console.error("Failed to initialize:", err);
+        // Still show the UI even if init fails — the user can troubleshoot
+        setInitialized(true);
+        invoke("close_splashscreen").catch(() => {});
+      }
+    }
+
+    async function initPhase2(mapped: Array<{id: string; email: string; displayName: string | null; avatarUrl: string | null; isActive: boolean; provider: string}>, savedAccountId: string | null) {
+      try {
+        // Initialize Gmail clients for existing accounts
+        await initializeClients();
+
+        // Fetch send-as aliases for each active email account (skip CalDAV-only)
+        // Run all in parallel instead of sequentially to reduce startup time
+        const emailAccountIds = mapped.filter((a) => a.isActive && a.provider !== "caldav").map((a) => a.id);
+        await Promise.all(
+          emailAccountIds.map(async (accountId) => {
+            try {
+              const client = await getGmailClient(accountId);
+              await fetchSendAsAliases(client, accountId);
+            } catch (err) {
+              console.warn(`Failed to fetch send-as aliases for ${accountId}:`, err);
+            }
+          }),
+        );
+
+        // Start background sync for active accounts
+        const activeIds = mapped.filter((a) => a.isActive).map((a) => a.id);
+        if (activeIds.length > 0) {
+          startBackgroundSync(activeIds);
+        }
 
         // Initialize notifications
         await initNotifications();
@@ -355,22 +382,17 @@ export default function App() {
         await updateBadgeCount();
 
         // Load initial task count
-        const activeAcct = useAccountStore.getState().activeAccountId;
+        const activeAcct = savedAccountId || useAccountStore.getState().activeAccountId;
         if (activeAcct) {
           const count = await getIncompleteTaskCount(activeAcct);
           useTaskStore.getState().setIncompleteCount(count);
         }
-
-        // Start auto-update checker
-        startUpdateChecker();
       } catch (err) {
-        console.error("Failed to initialize:", err);
+        console.error("Phase 2 init error:", err);
       }
-      setInitialized(true);
-      invoke("close_splashscreen").catch(() => {});
     }
 
-    init();
+    initPhase1();
 
     return () => {
       stopBackgroundSync();

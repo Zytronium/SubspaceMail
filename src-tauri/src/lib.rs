@@ -17,6 +17,7 @@ fn close_splashscreen(app: tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("splashscreen") {
         let _ = w.close();
     }
+    // Show the main window after closing the splashscreen
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
         let _ = w.set_focus();
