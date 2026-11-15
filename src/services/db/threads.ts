@@ -184,6 +184,12 @@ export async function setThreadLabels(
   threadId: string,
   labelIds: string[],
 ): Promise<void> {
+  // Safety: if called with empty labels, do nothing rather than wiping all labels.
+  // This prevents accidental label loss during sync if label collection fails.
+  if (labelIds.length === 0) {
+    console.warn(`[threads] setThreadLabels called with empty labels for ${accountId}/${threadId} — skipping to prevent label loss`);
+    return;
+  }
   const db = await getDb();
   // Remove existing labels
   await db.execute(

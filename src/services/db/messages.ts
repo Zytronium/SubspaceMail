@@ -186,6 +186,30 @@ export async function getRecentSentMessages(
 }
 
 /**
+ * Look up thread IDs for messages matching the given RFC 2822 Message-IDs.
+ * Returns a map of Message-ID → threadId for messages that exist in the DB.
+ * Used during delta sync to find existing threads that new messages reference.
+ */
+export async function getThreadIdsByMessageIds(
+  accountId: string,
+  rfcMessageIds: string[],
+): Promise<Map<string, string>> {
+  if (rfcMessageIds.length === 0) return new Map();
+  const db = await getDb();
+  const placeholders = rfcMessageIds.map((_, i) => `$${i + 2}`).join(", ");
+  const rows = await db.select<{ message_id_header: string; thread_id: string }[]>(
+    `SELECT message_id_header, thread_id FROM messages
+     WHERE account_id = $1 AND message_id_header IN (${placeholders})`,
+    [accountId, ...rfcMessageIds],
+  );
+  const map = new Map<string, string>();
+  for (const row of rows) {
+    map.set(row.message_id_header, row.thread_id);
+  }
+  return map;
+}
+
+/**
  * Count messages with broken body content.
  * Broken messages are those where:
  * 1. body_html or body_text starts with MIME boundaries (`--`), indicating raw multipart

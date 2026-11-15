@@ -112,6 +112,17 @@ describe("threads service - setThreadLabels", () => {
       ["acc-1", "thread-1", "SENT"],
     );
   });
+
+  it("skips if label list is empty to prevent accidental label loss", async () => {
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await setThreadLabels("acc-1", "thread-1", []);
+
+    expect(mockDb.execute).not.toHaveBeenCalled();
+    expect(consoleWarn).toHaveBeenCalledWith(
+      expect.stringContaining("setThreadLabels called with empty labels"),
+    );
+    consoleWarn.mockRestore();
+  });
 });
 
 describe("threads service - addThreadLabels", () => {
