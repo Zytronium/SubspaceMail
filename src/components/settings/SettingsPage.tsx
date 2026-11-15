@@ -1590,6 +1590,7 @@ function DeveloperTab() {
   const [tauriVersion, setTauriVersion] = useState("");
   const [webviewVersion, setWebviewVersion] = useState("");
   const [platformLabel, setPlatformLabel] = useState("...");
+  const [isFlatpakEnv, setIsFlatpakEnv] = useState(false);
   const [checkingForUpdate, setCheckingForUpdate] = useState(false);
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
   const [updateCheckDone, setUpdateCheckDone] = useState(false);
@@ -1622,6 +1623,11 @@ function DeveloperTab() {
       } else {
         setPlatformLabel(`${p} (${archLabel})`);
       }
+
+      // Check if running in Flatpak
+      const { isRunningInFlatpak } = await import("@/services/updateManager");
+      const inFlatpak = await isRunningInFlatpak();
+      setIsFlatpakEnv(inFlatpak);
 
       // Check if there's already a known update
       const { getAvailableUpdate } = await import("@/services/updateManager");
@@ -1672,43 +1678,54 @@ function DeveloperTab() {
       </Section>
 
       <Section title="Updates">
-        <div className="flex items-center justify-between">
+        {isFlatpakEnv ? (
           <div>
             <span className="text-sm text-text-secondary">Software updates</span>
-            {updateVersion && (
-              <p className="text-xs text-accent mt-0.5">
-                v{updateVersion} available
-              </p>
-            )}
-            {updateCheckDone && !updateVersion && (
-              <p className="text-xs text-success mt-0.5">Up to date</p>
-            )}
+            <p className="text-xs text-text-tertiary mt-0.5">
+              This app is installed via Flatpak. Updates are managed by your system — use{" "}
+              <code className="text-text-secondary">flatpak update</code> or check for updates in
+              your software center.
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            {updateVersion ? (
-              <Button
-                variant="primary"
-                size="md"
-                icon={<Download size={14} />}
-                onClick={handleInstallUpdate}
-                disabled={installingUpdate}
-              >
-                {installingUpdate ? "Updating..." : "Update & Restart"}
-              </Button>
-            ) : (
-              <Button
-                variant="secondary"
-                size="md"
-                icon={<RefreshCw size={14} className={checkingForUpdate ? "animate-spin" : ""} />}
-                onClick={handleCheckForUpdate}
-                disabled={checkingForUpdate}
-                className="bg-bg-tertiary text-text-primary border border-border-primary"
-              >
-                {checkingForUpdate ? "Checking..." : "Check for Updates"}
-              </Button>
-            )}
+        ) : (
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-sm text-text-secondary">Software updates</span>
+              {updateVersion && (
+                <p className="text-xs text-accent mt-0.5">
+                  v{updateVersion} available
+                </p>
+              )}
+              {updateCheckDone && !updateVersion && (
+                <p className="text-xs text-success mt-0.5">Up to date</p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {updateVersion ? (
+                <Button
+                  variant="primary"
+                  size="md"
+                  icon={<Download size={14} />}
+                  onClick={handleInstallUpdate}
+                  disabled={installingUpdate}
+                >
+                  {installingUpdate ? "Updating..." : "Update & Restart"}
+                </Button>
+              ) : (
+                <Button
+                  variant="secondary"
+                  size="md"
+                  icon={<RefreshCw size={14} className={checkingForUpdate ? "animate-spin" : ""} />}
+                  onClick={handleCheckForUpdate}
+                  disabled={checkingForUpdate}
+                  className="bg-bg-tertiary text-text-primary border border-border-primary"
+                >
+                  {checkingForUpdate ? "Checking..." : "Check for Updates"}
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </Section>
 
       <Section title="Developer Tools">

@@ -12,7 +12,21 @@ let checker: BackgroundChecker | null = null;
 let availableUpdate: { info: UpdateInfo; raw: unknown } | null = null;
 let callback: UpdateCallback | null = null;
 
+/** Check if the app is running inside a Flatpak sandbox */
+export async function isRunningInFlatpak(): Promise<boolean> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<boolean>("is_flatpak");
+  } catch {
+    return false;
+  }
+}
+
 async function performCheck(): Promise<void> {
+  // Skip update check in Flatpak — self-update is not possible in the sandbox
+  const inFlatpak = await isRunningInFlatpak();
+  if (inFlatpak) return;
+
   const { check } = await import("@tauri-apps/plugin-updater");
   const update = await check();
   if (update) {
@@ -38,11 +52,15 @@ export function stopUpdateChecker(): void {
 }
 
 export async function checkForUpdateNow(): Promise<UpdateInfo | null> {
+  const inFlatpak = await isRunningInFlatpak();
+  if (inFlatpak) return null;
   await performCheck();
   return availableUpdate?.info ?? null;
 }
 
 export async function installUpdate(): Promise<void> {
+  const inFlatpak = await isRunningInFlatpak();
+  if (inFlatpak) throw new Error("Self-update is not available in Flatpak. Please update via your system package manager or Flathub.");
   if (!availableUpdate) throw new Error("No update available");
   const update = availableUpdate.raw as {
     downloadAndInstall: () => Promise<void>;

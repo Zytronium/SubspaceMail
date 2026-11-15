@@ -49,6 +49,11 @@ fn open_devtools(app: tauri::AppHandle) {
     }
 }
 
+#[tauri::command]
+fn is_flatpak() -> bool {
+    std::env::var("FLATPAK").is_ok()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Set explicit AUMID on Windows so toast notifications show "Subspace Mail"
@@ -95,6 +100,7 @@ pub fn run() {
             set_tray_tooltip,
             close_splashscreen,
             open_devtools,
+            is_flatpak,
             commands::imap_test_connection,
             commands::imap_list_folders,
             commands::imap_fetch_messages,
