@@ -95,6 +95,8 @@ export function SettingsPage() {
   const setSendAndArchive = useUIStore((s) => s.setSendAndArchive);
   const inboxViewMode = useUIStore((s) => s.inboxViewMode);
   const setInboxViewMode = useUIStore((s) => s.setInboxViewMode);
+  const accountViewMode = useUIStore((s) => s.accountViewMode);
+  const setAccountViewMode = useUIStore((s) => s.setAccountViewMode);
   const reduceMotion = useUIStore((s) => s.reduceMotion);
   const setReduceMotion = useUIStore((s) => s.setReduceMotion);
   const accounts = useAccountStore((s) => s.accounts);
@@ -499,6 +501,17 @@ export function SettingsPage() {
                         options={[
                           { value: "unified", label: "Unified" },
                           { value: "split", label: "Split (Categories)" },
+                        ]}
+                        className="w-48"
+                      />
+                    </SettingRow>
+                    <SettingRow label="Account view mode">
+                      <Select
+                        value={accountViewMode}
+                        onChange={(val) => setAccountViewMode(val as "combined" | "separate")}
+                        options={[
+                          { value: "combined", label: "Combined" },
+                          { value: "separate", label: "Separate" },
                         ]}
                         className="w-48"
                       />

@@ -209,12 +209,14 @@ export function Sidebar({ collapsed, onAddAccount }: SidebarProps) {
   const activeLabel = useActiveLabel();
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const sidebarNavConfig = useUIStore((s) => s.sidebarNavConfig);
+  const accountViewMode = useUIStore((s) => s.accountViewMode);
   const taskIncompleteCount = useTaskStore((s) => s.incompleteCount);
   const inboxViewMode = useUIStore((s) => s.inboxViewMode);
   const setInboxViewMode = useUIStore((s) => s.setInboxViewMode);
   const activeCategory = useActiveCategory();
   const openComposer = useComposerStore((s) => s.openComposer);
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
+  const accounts = useAccountStore((s) => s.accounts);
   const labels = useLabelStore((s) => s.labels);
   const loadLabels = useLabelStore((s) => s.loadLabels);
   const deleteLabel = useLabelStore((s) => s.deleteLabel);
@@ -224,6 +226,9 @@ export function Sidebar({ collapsed, onAddAccount }: SidebarProps) {
   const refreshSmartFolderCounts = useSmartFolderStore((s) => s.refreshUnreadCounts);
   const createSmartFolder = useSmartFolderStore((s) => s.createFolder);
   const SECTION_IDS = new Set(["smart-folders", "labels"]);
+
+  // Combined mode: show account-grouped collapsible sections
+  const isCombinedMode = accountViewMode === "combined";
 
   const { visibleNavItems, showSmartFolders, showLabels } = useMemo(() => {
     if (!sidebarNavConfig) {
@@ -251,6 +256,36 @@ export function Sidebar({ collapsed, onAddAccount }: SidebarProps) {
   }, [sidebarNavConfig]);
 
   const [labelsExpanded, setLabelsExpanded] = useState(false);
+
+  // Combined mode: track which account groups are expanded
+  const [expandedAccounts, setExpandedAccounts] = useState<Set<string>>(() => new Set());
+  const toggleAccountGroup = useCallback((accountId: string) => {
+    setExpandedAccounts((prev) => {
+      const next = new Set(prev);
+      if (next.has(accountId)) {
+        next.delete(accountId);
+      } else {
+        next.add(accountId);
+      }
+      return next;
+    });
+  }, []);
+
+  // Auto-expand the active account's group on first render in combined mode
+  useEffect(() => {
+    if (isCombinedMode && activeAccountId && !expandedAccounts.has(activeAccountId)) {
+      setExpandedAccounts((prev) => {
+        const next = new Set(prev);
+        next.add(activeAccountId);
+        return next;
+      });
+    }
+  }, [isCombinedMode, activeAccountId, expandedAccounts]);
+
+  // Folder order for combined mode account groups
+  // Top: Inbox, Starred, Sent, Drafts. Bottom: Spam, Trash
+  const FOLDER_ORDER_TOP = ["inbox", "starred", "sent", "drafts"];
+  const FOLDER_ORDER_BOTTOM = ["spam", "trash", "all"];
 
   // Inline label editing state
   const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
@@ -343,11 +378,12 @@ export function Sidebar({ collapsed, onAddAccount }: SidebarProps) {
 
   return (
     <aside
-      className={`no-select flex flex-col bg-sidebar-bg text-sidebar-text border-r border-border-primary transition-all duration-200 glass-panel ${
+      className={`no-select flex flex-col bg-sidebar-bg text-sidebar-text border-r border-border-primary transition-all duration-200 glass-panel overflow-hidden ${
         collapsed ? "w-16" : "w-60"
       }`}
     >
-      <AccountSwitcher collapsed={collapsed} onAddAccount={onAddAccount} />
+      {/* In combined mode, hide the account switcher; account groups below replace it */}
+      {!isCombinedMode && <AccountSwitcher collapsed={collapsed} onAddAccount={onAddAccount} />}
 
       {/* Compose button */}
       <div className="px-3 py-2">
@@ -359,8 +395,9 @@ export function Sidebar({ collapsed, onAddAccount }: SidebarProps) {
         </button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-2">
-        {visibleNavItems.map((item) => {
+      <nav className="flex-1 overflow-x-hidden overflow-y-auto py-2">
+        {/* In combined mode, hide the top-level nav items; account groups below replace them */}
+        {!isCombinedMode && visibleNavItems.map((item) => {
           const Icon = item.icon;
           const isInbox = item.id === "inbox";
           return (
@@ -450,6 +487,92 @@ export function Sidebar({ collapsed, onAddAccount }: SidebarProps) {
             </div>
           );
         })}
+
+        {/* Combined mode: account groups with per-account folders */}
+        {isCombinedMode && accounts.length > 1 && !collapsed && (
+          <div className="pt-4">
+            <div className="px-3 pb-1">
+              <span className="text-xs font-medium text-sidebar-text/60 uppercase tracking-wider">
+                Accounts
+              </span>
+            </div>
+            {accounts.map((account) => {
+              const isExpanded = expandedAccounts.has(account.id);
+              const isActiveAccount = account.id === activeAccountId;
+              const initial = (account.displayName || account.email)[0]?.toUpperCase() ?? "?";
+              return (
+                <div key={account.id}>
+                  {/* Account group header */}
+                  <button
+                    onClick={() => toggleAccountGroup(account.id)}
+                    title={account.email}
+                    className={`flex items-center w-full gap-2 px-3 py-1.5 text-sm transition-colors rounded-md mx-1 ${
+                      isActiveAccount
+                        ? "text-accent font-medium"
+                        : "text-sidebar-text/80 hover:text-sidebar-text hover:bg-sidebar-hover"
+                    }`}
+                  >
+                    <span
+                      className={`w-5 h-5 rounded-full flex items-center justify-center text-[0.625rem] font-semibold shrink-0 ${
+                        isActiveAccount ? "bg-accent/15 text-accent" : "bg-sidebar-hover text-sidebar-text/60"
+                      }`}
+                    >
+                      {initial}
+                    </span>
+                    <span className="flex-1 truncate text-[0.8125rem]">
+                      {account.displayName || account.email.split("@")[0]}
+                    </span>
+                    {isExpanded ? (
+                      <ChevronUp size={12} className="shrink-0 text-sidebar-text/40" />
+                    ) : (
+                      <ChevronDown size={12} className="shrink-0 text-sidebar-text/40" />
+                    )}
+                  </button>
+                  {/* Account group folders */}
+                  {isExpanded && (
+                    <div className="ml-5 pl-3 border-l border-border-primary/50">
+                      {ALL_NAV_ITEMS
+                        .filter((item) => !SECTION_IDS.has(item.id) && item.id !== "tasks" && item.id !== "calendar" && item.id !== "attachments" && item.id !== "smart-folders")
+                        .sort((a, b) => {
+                          const aTop = FOLDER_ORDER_TOP.indexOf(a.id);
+                          const bTop = FOLDER_ORDER_TOP.indexOf(b.id);
+                          const aBottom = FOLDER_ORDER_BOTTOM.indexOf(a.id);
+                          const bBottom = FOLDER_ORDER_BOTTOM.indexOf(b.id);
+                          if (aTop >= 0 && bTop >= 0) return aTop - bTop;
+                          if (aTop >= 0) return -1;
+                          if (bTop >= 0) return 1;
+                          if (aBottom >= 0 && bBottom >= 0) return aBottom - bBottom;
+                          if (aBottom >= 0) return 1;
+                          if (bBottom >= 0) return -1;
+                          return a.label.localeCompare(b.label);
+                        })
+                        .map((item) => {
+                          const ItemIcon = item.icon;
+                          return (
+                            <button
+                              key={item.id}
+                              onClick={() => {
+                                useAccountStore.getState().setActiveAccount(account.id);
+                                navigateToLabel(item.id, { accountId: account.id });
+                              }}
+                              className={`flex items-center gap-2 w-full py-1.5 pr-3 text-left text-[0.8125rem] transition-colors rounded ${
+                                isActiveAccount && activeLabel === item.id
+                                  ? "text-accent font-medium bg-accent/5"
+                                  : "text-sidebar-text/70 hover:text-sidebar-text hover:bg-sidebar-hover"
+                              }`}
+                            >
+                              <ItemIcon size={14} className="shrink-0" />
+                              <span className="flex-1 truncate">{item.label}</span>
+                            </button>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Smart Folders */}
         {showSmartFolders && (smartFolders.length > 0 || !collapsed) && (

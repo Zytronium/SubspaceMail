@@ -272,6 +272,12 @@ export default function App() {
           ui.setInboxViewMode(savedViewMode);
         }
 
+        // Restore account view mode
+        const savedAccountViewMode = await getSetting("account_view_mode");
+        if (savedAccountViewMode === "combined" || savedAccountViewMode === "separate") {
+          ui.setAccountViewMode(savedAccountViewMode);
+        }
+
         // Restore reduce motion preference
         const savedReduceMotion = await getSetting("reduce_motion");
         if (savedReduceMotion === "true") {

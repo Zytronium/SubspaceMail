@@ -10,6 +10,7 @@ export type DefaultReplyMode = "reply" | "replyAll";
 export type MarkAsReadBehavior = "instant" | "2s" | "manual";
 export type FontScale = "small" | "default" | "large" | "xlarge";
 export type InboxViewMode = "unified" | "split";
+export type AccountViewMode = "combined" | "separate";
 
 export interface SidebarNavItem {
   id: string;
@@ -30,6 +31,7 @@ interface UIState {
   colorTheme: ColorThemeId;
   sendAndArchive: boolean;
   inboxViewMode: InboxViewMode;
+  accountViewMode: AccountViewMode;
   taskSidebarVisible: boolean;
   sidebarNavConfig: SidebarNavItem[] | null;
   reduceMotion: boolean;
@@ -52,6 +54,7 @@ interface UIState {
   setColorTheme: (theme: ColorThemeId) => void;
   setSendAndArchive: (enabled: boolean) => void;
   setInboxViewMode: (mode: InboxViewMode) => void;
+  setAccountViewMode: (mode: AccountViewMode) => void;
   toggleTaskSidebar: () => void;
   setTaskSidebarVisible: (visible: boolean) => void;
   setSidebarNavConfig: (config: SidebarNavItem[]) => void;
@@ -77,6 +80,7 @@ export const useUIStore = create<UIState>((set) => ({
   colorTheme: "indigo",
   sendAndArchive: false,
   inboxViewMode: "unified",
+  accountViewMode: "combined",
   taskSidebarVisible: false,
   sidebarNavConfig: null,
   reduceMotion: false,
@@ -139,6 +143,10 @@ export const useUIStore = create<UIState>((set) => ({
   setInboxViewMode: (inboxViewMode) => {
     setSetting("inbox_view_mode", inboxViewMode).catch(() => {});
     set({ inboxViewMode });
+  },
+  setAccountViewMode: (accountViewMode) => {
+    setSetting("account_view_mode", accountViewMode).catch(() => {});
+    set({ accountViewMode });
   },
   toggleTaskSidebar: () =>
     set((state) => {

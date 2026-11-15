@@ -49,6 +49,49 @@ export async function getThreadsForAccount(
   );
 }
 
+/**
+ * Fetch threads across all accounts (for combined/unified view mode).
+ * Optionally filters by a Gmail label ID (e.g. "INBOX", "SENT").
+ * Pass empty string or undefined for "All Mail" (no label filter).
+ */
+export async function getThreadsForAllAccounts(
+  accountIds: string[],
+  labelId?: string,
+  limit = 50,
+  offset = 0,
+): Promise<DbThread[]> {
+  if (accountIds.length === 0) return [];
+  const db = await getDb();
+
+  if (labelId) {
+    // $1 = labelId, $2..$N = accountIds, $(N+1) = limit, $(N+2) = offset
+    const n = accountIds.length;
+    const placeholders = accountIds.map((_, i) => `$${i + 2}`).join(", ");
+    return db.select<DbThread[]>(
+      `SELECT t.*, m.from_name, m.from_address FROM threads t
+       INNER JOIN thread_labels tl ON tl.account_id = t.account_id AND tl.thread_id = t.id
+       LEFT JOIN messages m ON m.account_id = t.account_id AND m.thread_id = t.id
+         AND m.date = (SELECT MAX(m2.date) FROM messages m2 WHERE m2.account_id = t.account_id AND m2.thread_id = t.id)
+       WHERE t.account_id IN (${placeholders}) AND tl.label_id = $1
+       GROUP BY t.account_id, t.id
+       ORDER BY t.is_pinned DESC, t.last_message_at DESC
+       LIMIT $${n + 2} OFFSET $${n + 3}`,
+      [labelId, ...accountIds, limit, offset] as unknown as any[],
+    );
+  }
+  // $1..$N = accountIds, $(N+1) = limit, $(N+2) = offset
+  const n = accountIds.length;
+  const placeholders = accountIds.map((_, i) => `$${i + 1}`).join(", ");
+  return db.select<DbThread[]>(
+    `SELECT t.*, m.from_name, m.from_address FROM threads t
+     LEFT JOIN messages m ON m.account_id = t.account_id AND m.thread_id = t.id
+       AND m.date = (SELECT MAX(m2.date) FROM messages m2 WHERE m2.account_id = t.account_id AND m2.thread_id = t.id)
+     WHERE t.account_id IN (${placeholders})
+     ORDER BY t.is_pinned DESC, t.last_message_at DESC LIMIT $${n + 1} OFFSET $${n + 2}`,
+    [...accountIds, limit, offset] as unknown as any[],
+  );
+}
+
 export async function getThreadsForCategory(
   accountId: string,
   category: string,

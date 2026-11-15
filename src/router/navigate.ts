@@ -11,7 +11,7 @@ const SYSTEM_LABELS = new Set([
  */
 export function navigateToLabel(
   label: string,
-  opts?: { category?: string; threadId?: string },
+  opts?: { category?: string; threadId?: string; accountId?: string },
 ): void {
   if (label === "settings") {
     router.navigate({ to: "/settings/$tab", params: { tab: "general" } });
@@ -57,6 +57,7 @@ export function navigateToLabel(
   if (SYSTEM_LABELS.has(label)) {
     const search: Record<string, string> = {};
     if (opts?.category) search["category"] = opts.category;
+    if (opts?.accountId) search["accountId"] = opts.accountId;
     if (opts?.threadId) {
       router.navigate({
         to: "/mail/$label/thread/$threadId",

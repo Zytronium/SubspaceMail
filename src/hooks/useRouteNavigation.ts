@@ -82,3 +82,19 @@ export function useSearchQuery(): string {
   }
   return "";
 }
+
+/**
+ * Get the account ID from search params (used in combined mode when viewing
+ * a specific account's folder rather than the aggregated view).
+ * Returns null when not set (meaning: show aggregated/combined view).
+ */
+export function useRouteAccountId(): string | null {
+  const matches = useMatchesSafe();
+  for (const match of matches) {
+    const search = (match as { search?: Record<string, unknown> }).search;
+    if (search && typeof search["accountId"] === "string" && search["accountId"]) {
+      return search["accountId"];
+    }
+  }
+  return null;
+}
