@@ -103,3 +103,37 @@ pub struct DeltaCheckResult {
     pub new_uids: Vec<u32>,
     pub uidvalidity_changed: bool,
 }
+
+// ---------- Full sync types (single-connection sync for all folders) ----------
+
+/// Request for a full sync operation that does everything in one IMAP connection.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FullSyncRequest {
+    /// Optional SINCE date filter for initial sync (format `DD-Mon-YYYY`).
+    /// If provided, uses initial sync mode. If None, uses delta sync mode.
+    pub since_date: Option<String>,
+    /// Batch size for UID FETCH operations.
+    pub batch_size: u32,
+    /// Delta check state for existing folders (used when since_date is None).
+    pub delta_folders: Vec<DeltaCheckRequest>,
+}
+
+/// Result of syncing a single folder within a full sync operation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FullSyncFolderResult {
+    pub folder: String,
+    pub uids: Vec<u32>,
+    pub messages: Vec<ImapMessage>,
+    pub folder_status: ImapFolderStatus,
+    /// True if UIDVALIDITY changed and a full resync was performed.
+    pub uidvalidity_changed: bool,
+}
+
+/// Result of a full sync operation covering all folders in one connection.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FullSyncResult {
+    /// All folders available on the server.
+    pub folders: Vec<ImapFolder>,
+    /// Per-folder sync results.
+    pub folder_results: Vec<FullSyncFolderResult>,
+}

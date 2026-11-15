@@ -149,7 +149,7 @@ async function syncImapAccount(accountId: string): Promise<void> {
 
   if (account.history_id) {
     // Delta sync — IMAP uses folder-level UID tracking
-    const result = await imapDeltaSync(accountId, syncDays);
+    const result = await imapDeltaSync(accountId);
 
     // Recovery: if delta sync found nothing new but the DB has no threads,
     // the previous initial sync likely failed or stored data incorrectly.

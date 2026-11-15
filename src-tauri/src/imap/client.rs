@@ -932,6 +932,354 @@ pub async fn sync_folder(
     })
 }
 
+/// Sync all folders in a single IMAP connection.
+///
+/// This is the fastest way to sync an IMAP account: one TCP+TLS+OAuth connection
+/// handles LIST, SELECT, SEARCH, and FETCH for every folder.
+///
+/// Two modes:
+/// - **Initial sync** (`since_date` is Some): LIST → for each syncable folder:
+///   SELECT → UID SEARCH SINCE → batched FETCH.
+/// - **Delta sync** (`since_date` is None): LIST → delta_check_folders → for each
+///   folder with new UIDs: SELECT → FETCH only the new messages.
+pub async fn full_sync(
+    session: &mut ImapSession,
+    req: &FullSyncRequest,
+) -> Result<FullSyncResult, String> {
+    // Phase 1: LIST all folders
+    let folders = list_folders(session).await?;
+
+    let mut folder_results = Vec::new();
+
+    if let Some(ref since_date) = req.since_date {
+        // ---- Initial sync mode: SEARCH SINCE + FETCH for each folder ----
+        for folder in &folders {
+            let raw_path = &folder.raw_path;
+            if folder.exists == 0 {
+                continue;
+            }
+
+            // SELECT the folder
+            let mailbox = match tokio::time::timeout(IMAP_CMD_TIMEOUT, session.select(raw_path)).await {
+                Ok(Ok(m)) => m,
+                Ok(Err(e)) => {
+                    log::warn!("full_sync: SELECT {raw_path} failed: {e}");
+                    continue;
+                }
+                Err(_) => {
+                    log::warn!("full_sync: SELECT {raw_path} timed out");
+                    continue;
+                }
+            };
+
+            let folder_status = ImapFolderStatus {
+                uidvalidity: mailbox.uid_validity.unwrap_or(0),
+                uidnext: mailbox.uid_next.unwrap_or(0),
+                exists: mailbox.exists,
+                unseen: mailbox.unseen.unwrap_or(0),
+                highest_modseq: mailbox.highest_modseq,
+            };
+
+            // UID SEARCH SINCE
+            let search_query = format!("SINCE {since_date}");
+            let uids_raw = match tokio::time::timeout(IMAP_SEARCH_TIMEOUT, session.uid_search(&search_query)).await {
+                Ok(Ok(uids)) => uids.into_iter().collect::<Vec<u32>>(),
+                Ok(Err(e)) => {
+                    log::warn!("full_sync: UID SEARCH {search_query} {raw_path} failed: {e}");
+                    continue;
+                }
+                Err(_) => {
+                    log::warn!("full_sync: UID SEARCH {search_query} {raw_path} timed out");
+                    continue;
+                }
+            };
+
+            let mut uids = uids_raw;
+            uids.sort();
+
+            log::info!(
+                "full_sync initial {raw_path}: {} UIDs found (search={search_query})",
+                uids.len(),
+            );
+
+            if uids.is_empty() {
+                folder_results.push(FullSyncFolderResult {
+                    folder: raw_path.clone(),
+                    uids,
+                    messages: vec![],
+                    folder_status,
+                    uidvalidity_changed: false,
+                });
+                continue;
+            }
+
+            // Batched FETCH on the same session
+            let messages = fetch_uids_from_session(session, raw_path, &uids, req.batch_size).await?;
+
+            log::info!("full_sync initial {raw_path}: fetched {} messages", messages.len());
+
+            folder_results.push(FullSyncFolderResult {
+                folder: raw_path.clone(),
+                uids,
+                messages,
+                folder_status,
+                uidvalidity_changed: false,
+            });
+        }
+    } else {
+        // ---- Delta sync mode: delta_check + FETCH only new UIDs ----
+        let delta_map: std::collections::HashMap<String, DeltaCheckRequest> = req
+            .delta_folders
+            .iter()
+            .map(|d| (d.folder.clone(), d.clone()))
+            .collect();
+
+        // Build delta check requests for folders that exist on both server and in saved state
+        let delta_requests: Vec<DeltaCheckRequest> = folders
+            .iter()
+            .filter(|f| delta_map.contains_key(&f.raw_path))
+            .map(|f| delta_map.get(&f.raw_path).unwrap().clone())
+            .collect();
+
+        // Check for new folders (on server but not in saved state)
+        let new_folders: Vec<&ImapFolder> = folders
+            .iter()
+            .filter(|f| !delta_map.contains_key(&f.raw_path) && f.exists > 0)
+            .collect();
+
+        // For new folders, do a full search+fetch (no since_date filter — fetch all)
+        for folder in &new_folders {
+            let raw_path = &folder.raw_path;
+
+            let mailbox = match tokio::time::timeout(IMAP_CMD_TIMEOUT, session.select(raw_path)).await {
+                Ok(Ok(m)) => m,
+                Ok(Err(e)) => {
+                    log::warn!("full_sync delta: SELECT {raw_path} (new folder) failed: {e}");
+                    continue;
+                }
+                Err(_) => {
+                    log::warn!("full_sync delta: SELECT {raw_path} (new folder) timed out");
+                    continue;
+                }
+            };
+
+            let folder_status = ImapFolderStatus {
+                uidvalidity: mailbox.uid_validity.unwrap_or(0),
+                uidnext: mailbox.uid_next.unwrap_or(0),
+                exists: mailbox.exists,
+                unseen: mailbox.unseen.unwrap_or(0),
+                highest_modseq: mailbox.highest_modseq,
+            };
+
+            let uids_raw = match tokio::time::timeout(IMAP_SEARCH_TIMEOUT, session.uid_search("ALL")).await {
+                Ok(Ok(uids)) => uids.into_iter().collect::<Vec<u32>>(),
+                Ok(Err(e)) => {
+                    log::warn!("full_sync delta: UID SEARCH ALL {raw_path} failed: {e}");
+                    continue;
+                }
+                Err(_) => {
+                    log::warn!("full_sync delta: UID SEARCH ALL {raw_path} timed out");
+                    continue;
+                }
+            };
+
+            let mut uids = uids_raw;
+            uids.sort();
+
+            if uids.is_empty() {
+                folder_results.push(FullSyncFolderResult {
+                    folder: raw_path.clone(),
+                    uids,
+                    messages: vec![],
+                    folder_status,
+                    uidvalidity_changed: false,
+                });
+                continue;
+            }
+
+            let messages = fetch_uids_from_session(session, raw_path, &uids, req.batch_size).await?;
+
+            folder_results.push(FullSyncFolderResult {
+                folder: raw_path.clone(),
+                uids,
+                messages,
+                folder_status,
+                uidvalidity_changed: false,
+            });
+        }
+
+        // Delta check existing folders
+        if !delta_requests.is_empty() {
+            let delta_results = delta_check_folders(session, &delta_requests).await?;
+
+            for delta_result in delta_results {
+                let raw_path = &delta_result.folder;
+
+                if delta_result.uidvalidity_changed {
+                    // UIDVALIDITY changed — full resync of this folder
+                    log::warn!(
+                        "full_sync delta: UIDVALIDITY changed for {raw_path}, doing full resync"
+                    );
+
+                    let mailbox = match tokio::time::timeout(IMAP_CMD_TIMEOUT, session.select(raw_path)).await {
+                        Ok(Ok(m)) => m,
+                        Ok(Err(e)) => {
+                            log::warn!("full_sync delta: SELECT {raw_path} (uidvalidity change) failed: {e}");
+                            continue;
+                        }
+                        Err(_) => {
+                            log::warn!("full_sync delta: SELECT {raw_path} (uidvalidity change) timed out");
+                            continue;
+                        }
+                    };
+
+                    let folder_status = ImapFolderStatus {
+                        uidvalidity: mailbox.uid_validity.unwrap_or(0),
+                        uidnext: mailbox.uid_next.unwrap_or(0),
+                        exists: mailbox.exists,
+                        unseen: mailbox.unseen.unwrap_or(0),
+                        highest_modseq: mailbox.highest_modseq,
+                    };
+
+                    let uids_raw = match tokio::time::timeout(IMAP_SEARCH_TIMEOUT, session.uid_search("ALL")).await {
+                        Ok(Ok(uids)) => uids.into_iter().collect::<Vec<u32>>(),
+                        Ok(Err(e)) => {
+                            log::warn!("full_sync delta: UID SEARCH ALL {raw_path} (uidvalidity) failed: {e}");
+                            continue;
+                        }
+                        Err(_) => {
+                            log::warn!("full_sync delta: UID SEARCH ALL {raw_path} (uidvalidity) timed out");
+                            continue;
+                        }
+                    };
+
+                    let mut uids = uids_raw;
+                    uids.sort();
+
+                    let messages = if uids.is_empty() {
+                        vec![]
+                    } else {
+                        fetch_uids_from_session(session, raw_path, &uids, req.batch_size).await?
+                    };
+
+                    folder_results.push(FullSyncFolderResult {
+                        folder: raw_path.clone(),
+                        uids,
+                        messages,
+                        folder_status,
+                        uidvalidity_changed: true,
+                    });
+                } else if !delta_result.new_uids.is_empty() {
+                    // Normal delta: fetch only the new UIDs
+                    let new_uids = &delta_result.new_uids;
+
+                    let mailbox = match tokio::time::timeout(IMAP_CMD_TIMEOUT, session.select(raw_path)).await {
+                        Ok(Ok(m)) => m,
+                        Ok(Err(e)) => {
+                            log::warn!("full_sync delta: SELECT {raw_path} (delta fetch) failed: {e}");
+                            continue;
+                        }
+                        Err(_) => {
+                            log::warn!("full_sync delta: SELECT {raw_path} (delta fetch) timed out");
+                            continue;
+                        }
+                    };
+
+                    let folder_status = ImapFolderStatus {
+                        uidvalidity: mailbox.uid_validity.unwrap_or(0),
+                        uidnext: mailbox.uid_next.unwrap_or(0),
+                        exists: mailbox.exists,
+                        unseen: mailbox.unseen.unwrap_or(0),
+                        highest_modseq: mailbox.highest_modseq,
+                    };
+
+                    let messages = fetch_uids_from_session(session, raw_path, new_uids, req.batch_size).await?;
+
+                    folder_results.push(FullSyncFolderResult {
+                        folder: raw_path.clone(),
+                        uids: new_uids.clone(),
+                        messages,
+                        folder_status,
+                        uidvalidity_changed: false,
+                    });
+                }
+            }
+        }
+    }
+
+    Ok(FullSyncResult {
+        folders,
+        folder_results,
+    })
+}
+
+/// Fetch a list of UIDs from the currently-selected folder, in batches.
+/// The session must already have the folder selected.
+async fn fetch_uids_from_session(
+    session: &mut ImapSession,
+    folder: &str,
+    uids: &[u32],
+    batch_size: u32,
+) -> Result<Vec<ImapMessage>, String> {
+    let parser = mail_parser::MessageParser::default();
+    let mut all_messages = Vec::new();
+    let bs = batch_size as usize;
+
+    for chunk in uids.chunks(bs) {
+        let uid_set: String = chunk
+            .iter()
+            .map(|u| u.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+
+        let fetches = tokio::time::timeout(IMAP_FETCH_TIMEOUT, async {
+            let stream = session
+                .uid_fetch(&uid_set, "(UID FLAGS INTERNALDATE RFC822)")
+                .await
+                .map_err(|e| format!("UID FETCH {folder} uids={uid_set} failed: {e}"))?;
+            Ok::<_, String>(stream.collect::<Vec<_>>().await)
+        })
+        .await
+        .map_err(|_| format!("UID FETCH {folder} timed out after {}s", IMAP_FETCH_TIMEOUT.as_secs()))?;
+
+        let raw_fetches: Vec<_> = fetches?;
+        for r in raw_fetches {
+            match r {
+                Ok(f) => {
+                    let uid = match f.uid {
+                        Some(u) => u,
+                        None => {
+                            log::warn!("full_sync {folder}: response missing UID");
+                            continue;
+                        }
+                    };
+                    let raw = match f.body() {
+                        Some(b) => b,
+                        None => {
+                            log::warn!("full_sync {folder}: UID {uid} has no body");
+                            continue;
+                        }
+                    };
+                    let raw_size = raw.len() as u32;
+                    let flags: Vec<_> = f.flags().collect();
+                    let is_read = flags.iter().any(|fl| matches!(fl, Flag::Seen));
+                    let is_starred = flags.iter().any(|fl| matches!(fl, Flag::Flagged));
+                    let is_draft = flags.iter().any(|fl| matches!(fl, Flag::Draft));
+                    let internal_date = f.internal_date().map(|dt| dt.timestamp());
+
+                    match parse_message(&parser, raw, uid, folder, raw_size, is_read, is_starred, is_draft, internal_date) {
+                        Ok(msg) => all_messages.push(msg),
+                        Err(e) => log::warn!("full_sync: failed to parse UID {uid}: {e}"),
+                    }
+                }
+                Err(e) => log::warn!("full_sync fetch stream error in {folder}: {e}"),
+            }
+        }
+    }
+
+    Ok(all_messages)
+}
+
 /// Test IMAP connectivity: connect, login, list, logout.
 pub async fn test_connection(config: &ImapConfig) -> Result<String, String> {
     let mut session = connect(config).await?;

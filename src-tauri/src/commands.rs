@@ -2,8 +2,9 @@ use crate::caldav::client as caldav_client;
 use crate::caldav::types::{CalDavCalendar, CalDavConfig, CalDavEvent};
 use crate::imap::client as imap_client;
 use crate::imap::types::{
-    DeltaCheckRequest, DeltaCheckResult, ImapConfig, ImapFetchResult, ImapFolder,
-    ImapFolderSearchResult, ImapFolderStatus, ImapFolderSyncResult, ImapMessage,
+    DeltaCheckRequest, DeltaCheckResult, FullSyncRequest, FullSyncResult, ImapConfig,
+    ImapFetchResult, ImapFolder, ImapFolderSearchResult, ImapFolderStatus,
+    ImapFolderSyncResult, ImapMessage,
 };
 use crate::smtp::client as smtp_client;
 use crate::smtp::types::{SmtpConfig, SmtpSendResult};
@@ -313,6 +314,25 @@ pub async fn imap_delta_check(
     let results = imap_client::delta_check_folders(&mut session, &folders).await?;
     let _ = session.logout().await;
     Ok(results)
+}
+
+/// Sync all IMAP folders in a single connection.
+///
+/// This is the fastest sync method: one TCP+TLS+OAuth connection handles
+/// LIST, SELECT, SEARCH, and FETCH for every folder.
+///
+/// Two modes:
+/// - **Initial sync** (`since_date` is Some): SEARCH SINCE + FETCH for each folder.
+/// - **Delta sync** (`since_date` is None): delta_check + FETCH only new UIDs.
+#[tauri::command]
+pub async fn imap_full_sync(
+    config: ImapConfig,
+    request: FullSyncRequest,
+) -> Result<FullSyncResult, String> {
+    let mut session = imap_client::connect(&config).await?;
+    let result = imap_client::full_sync(&mut session, &request).await;
+    let _ = session.logout().await;
+    result
 }
 
 // ---------- SMTP commands ----------

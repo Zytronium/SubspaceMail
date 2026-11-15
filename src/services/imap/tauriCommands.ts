@@ -101,6 +101,27 @@ export interface DeltaCheckResult {
   uidvalidity_changed: boolean;
 }
 
+// ---------- Full sync types (single-connection sync for all folders) ----------
+
+export interface FullSyncRequest {
+  since_date: string | null;
+  batch_size: number;
+  delta_folders: DeltaCheckRequest[];
+}
+
+export interface FullSyncFolderResult {
+  folder: string;
+  uids: number[];
+  messages: ImapMessage[];
+  folder_status: ImapFolderStatus;
+  uidvalidity_changed: boolean;
+}
+
+export interface FullSyncResult {
+  folders: ImapFolder[];
+  folder_results: FullSyncFolderResult[];
+}
+
 // ---------- SMTP types ----------
 
 export interface SmtpConfig {
@@ -315,6 +336,23 @@ export async function imapRawFetchDiagnostic(
   uidRange: string,
 ): Promise<string> {
   return invoke<string>('imap_raw_fetch_diagnostic', { config, folder, uidRange });
+}
+
+/**
+ * Sync all IMAP folders in a single connection.
+ *
+ * This is the fastest sync method: one TCP+TLS+OAuth connection handles
+ * LIST, SELECT, SEARCH, and FETCH for every folder.
+ *
+ * Two modes:
+ * - **Initial sync** (`sinceDate` is provided): SEARCH SINCE + FETCH for each folder.
+ * - **Delta sync** (`sinceDate` is null): delta_check + FETCH only new UIDs.
+ */
+export async function imapFullSync(
+  config: ImapConfig,
+  request: FullSyncRequest,
+): Promise<FullSyncResult> {
+  return invoke<FullSyncResult>('imap_full_sync', { config, request });
 }
 
 // ---------- SMTP commands ----------

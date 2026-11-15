@@ -10,6 +10,7 @@ vi.mock("./tauriCommands", () => ({
   imapSearchFolder: vi.fn(),
   imapDeltaCheck: vi.fn(),
   imapSyncFolder: vi.fn(),
+  imapFullSync: vi.fn(),
 }));
 vi.mock("./imapConfigBuilder", () => ({
   buildImapConfig: vi.fn(() => ({
@@ -81,7 +82,7 @@ import {
   createMockImapFolderStatus,
   createMockImapFetchResult,
 } from "@/test/mocks";
-import { imapListFolders, imapSyncFolder, imapFetchMessages, imapDeltaCheck } from "./tauriCommands";
+import { imapFullSync } from "./tauriCommands";
 import { getAccount } from "../db/accounts";
 import { upsertMessage, batchUpsertMessages, updateMessageThreadIds, getThreadIdsByMessageIds } from "../db/messages";
 import { upsertThread, batchUpsertThreads, deleteThread, setThreadLabels, addThreadLabels, getThreadsByIds } from "../db/threads";
@@ -256,9 +257,7 @@ describe("imapMessageToParsedMessage", () => {
 
 describe("imapInitialSync", () => {
   const mockGetAccount = vi.mocked(getAccount);
-  const mockImapListFolders = vi.mocked(imapListFolders);
-  const mockImapSyncFolder = vi.mocked(imapSyncFolder);
-  const mockImapFetchMessages = vi.mocked(imapFetchMessages);
+  const mockImapFullSync = vi.mocked(imapFullSync);
   const mockBatchUpsertMessages = vi.mocked(batchUpsertMessages);
   const mockUpdateMessageThreadIds = vi.mocked(updateMessageThreadIds);
   const mockBatchUpsertThreads = vi.mocked(batchUpsertThreads);
@@ -271,10 +270,7 @@ describe("imapInitialSync", () => {
   });
 
   afterEach(() => {
-    // Reset persistent mock implementations to prevent leaking between describe blocks
-    mockImapSyncFolder.mockReset();
-    mockImapFetchMessages.mockReset();
-    mockImapListFolders.mockReset();
+    mockImapFullSync.mockReset();
     vi.useRealTimers();
   });
 
@@ -285,12 +281,16 @@ describe("imapInitialSync", () => {
       raw_path: folder,
       exists: messages.length,
     });
-    mockImapListFolders.mockResolvedValue([mockFolder]);
-    // imapSyncFolder returns UIDs + full messages in a single connection
-    mockImapSyncFolder.mockResolvedValue({
-      uids: messages.map((m) => m.uid),
-      messages,
-      folder_status: createMockImapFolderStatus({ exists: messages.length }),
+    // imapFullSync returns all folders + per-folder results in a single connection
+    mockImapFullSync.mockResolvedValue({
+      folders: [mockFolder],
+      folder_results: [{
+        folder: folder,
+        uids: messages.map((m) => m.uid),
+        messages,
+        folder_status: createMockImapFolderStatus({ exists: messages.length }),
+        uidvalidity_changed: false,
+      }],
     });
     return mockFolder;
   }
@@ -418,11 +418,13 @@ describe("imapInitialSync", () => {
 
   it("handles empty folders gracefully", async () => {
     const mockFolder = createMockImapFolder({ path: "INBOX", raw_path: "INBOX", exists: 0 });
-    mockImapListFolders.mockResolvedValue([mockFolder]);
+    mockImapFullSync.mockResolvedValue({
+      folders: [mockFolder],
+      folder_results: [],
+    });
 
     const result = await imapInitialSync("acc-1");
 
-    expect(mockImapSyncFolder).not.toHaveBeenCalled();
     expect(mockBatchUpsertMessages).not.toHaveBeenCalled();
     expect(result.messages).toEqual([]);
   });
@@ -444,19 +446,21 @@ describe("imapInitialSync", () => {
     expect(phases).toContain("done");
   });
 
-  it("uses imapSyncFolder for single-connection sync per folder", async () => {
+  it("uses imapFullSync for single-connection sync of all folders", async () => {
     const msg = createMockImapMessage({ uid: 1, message_id: "<m1@test>", date: Math.floor(Date.now() / 1000) });
     setupFolderWithMessages("INBOX", [msg]);
 
     await imapInitialSync("acc-1");
 
-    // Should use imapSyncFolder (single connection: SELECT → SEARCH → FETCH)
-    expect(mockImapSyncFolder).toHaveBeenCalledTimes(1);
-    expect(mockImapSyncFolder).toHaveBeenCalledWith(
+    // Should use imapFullSync (single connection: LIST → SELECT → SEARCH → FETCH for all folders)
+    expect(mockImapFullSync).toHaveBeenCalledTimes(1);
+    expect(mockImapFullSync).toHaveBeenCalledWith(
       expect.objectContaining({ host: "imap.example.com" }),
-      "INBOX",
-      expect.any(Number), // batchSize
-      expect.stringMatching(/^\d{1,2}-[A-Z][a-z]{2}-\d{4}$/), // sinceDate in DD-Mon-YYYY format
+      expect.objectContaining({
+        since_date: expect.stringMatching(/^\d{1,2}-[A-Z][a-z]{2}-\d{4}$/),
+        batch_size: expect.any(Number),
+        delta_folders: [],
+      }),
     );
   });
 
@@ -476,108 +480,87 @@ describe("imapInitialSync", () => {
     expect(mockBatchUpsertThreads).toHaveBeenCalled();
   });
 
-  it("continues on folder sync error", async () => {
+  it("returns messages from all folders in one call", async () => {
+    const inboxMsg = createMockImapMessage({ uid: 1, message_id: "<m1@test>", subject: "Inbox", date: Math.floor(Date.now() / 1000) });
+    const sentMsg = createMockImapMessage({ uid: 2, message_id: "<m2@test>", subject: "Sent", date: Math.floor(Date.now() / 1000) });
+
     const folders = [
-      createMockImapFolder({ path: "INBOX", raw_path: "INBOX", exists: 2 }),
+      createMockImapFolder({ path: "INBOX", raw_path: "INBOX", exists: 1 }),
       createMockImapFolder({ path: "Sent", raw_path: "Sent", exists: 1 }),
     ];
-    mockImapListFolders.mockResolvedValue(folders);
+    mockImapFullSync.mockResolvedValue({
+      folders,
+      folder_results: [
+        {
+          folder: "INBOX",
+          uids: [1],
+          messages: [inboxMsg],
+          folder_status: createMockImapFolderStatus({ exists: 1 }),
+          uidvalidity_changed: false,
+        },
+        {
+          folder: "Sent",
+          uids: [2],
+          messages: [sentMsg],
+          folder_status: createMockImapFolderStatus({ exists: 1 }),
+          uidvalidity_changed: false,
+        },
+      ],
+    });
 
-    const msg = createMockImapMessage({ uid: 1, message_id: "<m1@test>", date: Math.floor(Date.now() / 1000) });
-
-    // First folder fails, second succeeds
-    mockImapSyncFolder
-      .mockRejectedValueOnce(new Error("folder sync failed"))
-      .mockResolvedValueOnce({
-        uids: [msg.uid],
-        messages: [msg],
-        folder_status: createMockImapFolderStatus({ exists: 1 }),
-      });
-
-    const syncPromise = imapInitialSync("acc-1");
-    await vi.runAllTimersAsync();
-    const result = await syncPromise;
-
-    // Sync should complete — second folder succeeded
+    const result = await imapInitialSync("acc-1");
     expect(result.messages).toEqual([]);
+    // Both folders' messages should be stored
+    const allMsgCalls = mockBatchUpsertMessages.mock.calls;
+    let totalMsgs = 0;
+    for (const call of allMsgCalls) {
+      totalMsgs += (call[0] as any[]).length;
+    }
+    expect(totalMsgs).toBe(2);
   });
 
-  it("circuit breaker skips remaining folders after 5 consecutive connection failures", async () => {
-    const folders = Array.from({ length: 8 }, (_, i) =>
-      createMockImapFolder({ path: `folder-${i}`, raw_path: `folder-${i}`, exists: 10 }),
-    );
-    mockImapListFolders.mockResolvedValue(folders);
-    mockImapSyncFolder.mockRejectedValue(new Error("TCP connect timed out (os error 60)"));
+  it("propagates error when imapFullSync fails", async () => {
+    mockImapFullSync.mockRejectedValue(new Error("TCP connect timed out"));
 
-    // Advance timers and catch the expected error in one go to avoid
-    // Vitest's unhandled-rejection tracker from flagging it.
     let caughtError: Error | null = null;
     const syncPromise = imapInitialSync("acc-1").catch((err: Error) => {
       caughtError = err;
     });
-    await vi.runAllTimersAsync();
     await syncPromise;
 
-    // All folders fail → error is propagated
     expect(caughtError).not.toBeNull();
-    expect(caughtError!.message).toContain("All folders failed to sync");
-
-    // Circuit breaker should stop after 5 failures (CIRCUIT_BREAKER_MAX_FAILURES)
-    expect(mockImapSyncFolder).toHaveBeenCalledTimes(5);
+    expect(caughtError!.message).toContain("TCP connect timed out");
   });
 
-  it("circuit breaker resets on successful folder sync", async () => {
+  it("syncs multiple folders in a single connection", async () => {
     const folders = [
-      createMockImapFolder({ path: "f1", raw_path: "f1", exists: 10 }),
-      createMockImapFolder({ path: "f2", raw_path: "f2", exists: 10 }),
-      createMockImapFolder({ path: "f3", raw_path: "f3", exists: 10 }),
-      createMockImapFolder({ path: "f4", raw_path: "f4", exists: 10 }),
+      createMockImapFolder({ path: "INBOX", raw_path: "INBOX", exists: 1 }),
+      createMockImapFolder({ path: "Sent", raw_path: "Sent", exists: 1 }),
+      createMockImapFolder({ path: "Drafts", raw_path: "Drafts", exists: 1 }),
     ];
-    mockImapListFolders.mockResolvedValue(folders);
+    const msg1 = createMockImapMessage({ uid: 1, message_id: "<m1@test>", date: Math.floor(Date.now() / 1000) });
+    const msg2 = createMockImapMessage({ uid: 2, message_id: "<m2@test>", date: Math.floor(Date.now() / 1000) });
+    const msg3 = createMockImapMessage({ uid: 3, message_id: "<m3@test>", date: Math.floor(Date.now() / 1000) });
 
-    const msg = createMockImapMessage({ uid: 1, message_id: "<m1@test>", date: Math.floor(Date.now() / 1000) });
-
-    // First 2 fail with connection error, 3rd succeeds, 4th fails
-    mockImapSyncFolder
-      .mockRejectedValueOnce(new Error("TCP connect timed out"))
-      .mockRejectedValueOnce(new Error("TCP connect timed out"))
-      .mockResolvedValueOnce({
-        uids: [msg.uid],
-        messages: [msg],
-        folder_status: createMockImapFolderStatus({ exists: 1 }),
-      })
-      .mockRejectedValueOnce(new Error("TCP connect timed out"));
-
-    const syncPromise = imapInitialSync("acc-1");
-    await vi.runAllTimersAsync();
-    await syncPromise;
-
-    // All 4 folders should be attempted (circuit breaker resets after success on f3)
-    expect(mockImapSyncFolder).toHaveBeenCalledTimes(4);
-  });
-
-  it("continues on non-connection errors without triggering circuit breaker", async () => {
-    const folders = Array.from({ length: 6 }, (_, i) =>
-      createMockImapFolder({ path: `folder-${i}`, raw_path: `folder-${i}`, exists: 10 }),
-    );
-    mockImapListFolders.mockResolvedValue(folders);
-
-    // Non-connection errors should NOT trigger circuit breaker
-    mockImapSyncFolder.mockRejectedValue(new Error("PARSE failed: invalid response"));
-
-    let caughtError: Error | null = null;
-    const syncPromise = imapInitialSync("acc-1").catch((err: Error) => {
-      caughtError = err;
+    mockImapFullSync.mockResolvedValue({
+      folders,
+      folder_results: [
+        { folder: "INBOX", uids: [1], messages: [msg1], folder_status: createMockImapFolderStatus({ exists: 1 }), uidvalidity_changed: false },
+        { folder: "Sent", uids: [2], messages: [msg2], folder_status: createMockImapFolderStatus({ exists: 1 }), uidvalidity_changed: false },
+        { folder: "Drafts", uids: [3], messages: [msg3], folder_status: createMockImapFolderStatus({ exists: 1 }), uidvalidity_changed: false },
+      ],
     });
-    await vi.runAllTimersAsync();
-    await syncPromise;
 
-    // All folders fail → error is propagated, but all were attempted first
-    expect(caughtError).not.toBeNull();
-    expect(caughtError!.message).toContain("All folders failed to sync");
+    await imapInitialSync("acc-1");
 
-    // All folders should be attempted since these aren't connection errors
-    expect(mockImapSyncFolder).toHaveBeenCalledTimes(6);
+    // All 3 folders synced in one connection
+    expect(mockImapFullSync).toHaveBeenCalledTimes(1);
+    const allMsgCalls = mockBatchUpsertMessages.mock.calls;
+    let totalMsgs = 0;
+    for (const call of allMsgCalls) {
+      totalMsgs += (call[0] as any[]).length;
+    }
+    expect(totalMsgs).toBe(3);
   });
 });
 
@@ -652,58 +635,46 @@ describe("isConnectionError", () => {
 
 describe("imapInitialSync — all-folders-fail propagation", () => {
   const mockGetAccount = vi.mocked(getAccount);
-  const mockImapListFolders = vi.mocked(imapListFolders);
-  const mockImapSyncFolder = vi.mocked(imapSyncFolder);
+  const mockImapFullSync = vi.mocked(imapFullSync);
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.useFakeTimers();
     mockGetAccount.mockResolvedValue(createMockImapAccount({ id: "acc-1" }));
   });
 
   afterEach(() => {
-    mockImapSyncFolder.mockReset();
-    vi.useRealTimers();
+    mockImapFullSync.mockReset();
   });
 
-  it("throws when all folders fail and no messages were stored", async () => {
-    const folders = [
-      createMockImapFolder({ path: "INBOX", raw_path: "INBOX", exists: 10 }),
-      createMockImapFolder({ path: "Sent", raw_path: "Sent", exists: 5 }),
-    ];
-    mockImapListFolders.mockResolvedValue(folders);
-    mockImapSyncFolder.mockRejectedValue("authentication failed");
+  it("throws when imapFullSync fails", async () => {
+    mockImapFullSync.mockRejectedValue(new Error("authentication failed"));
 
     let caughtError: Error | null = null;
     const syncPromise = imapInitialSync("acc-1").catch((err: Error) => {
       caughtError = err;
     });
-    await vi.runAllTimersAsync();
     await syncPromise;
 
     expect(caughtError).not.toBeNull();
-    expect(caughtError!.message).toContain("All folders failed to sync");
+    expect(caughtError!.message).toContain("authentication failed");
   });
 });
 
 describe("imapInitialSync — placeholder cleanup", () => {
   const mockGetAccount = vi.mocked(getAccount);
-  const mockImapListFolders = vi.mocked(imapListFolders);
-  const mockImapSyncFolder = vi.mocked(imapSyncFolder);
+  const mockImapFullSync = vi.mocked(imapFullSync);
   const mockDeleteThread = vi.mocked(deleteThread);
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.useFakeTimers();
     mockGetAccount.mockResolvedValue(createMockImapAccount({ id: "acc-1" }));
   });
 
   afterEach(() => {
-    vi.useRealTimers();
+    mockImapFullSync.mockReset();
   });
 
   it("deletes orphaned placeholder threads after threading", async () => {
-    // Two messages that share the same thread via References
     const msg1 = createMockImapMessage({
       uid: 1,
       message_id: "<m1@test>",
@@ -720,26 +691,26 @@ describe("imapInitialSync — placeholder cleanup", () => {
     });
 
     const mockFolder = createMockImapFolder({ path: "INBOX", raw_path: "INBOX", exists: 2 });
-    mockImapListFolders.mockResolvedValue([mockFolder]);
-    mockImapSyncFolder.mockResolvedValue({
-      uids: [1, 2],
-      messages: [msg1, msg2],
-      folder_status: createMockImapFolderStatus({ exists: 2 }),
+    mockImapFullSync.mockResolvedValue({
+      folders: [mockFolder],
+      folder_results: [{
+        folder: "INBOX",
+        uids: [1, 2],
+        messages: [msg1, msg2],
+        folder_status: createMockImapFolderStatus({ exists: 2 }),
+        uidvalidity_changed: false,
+      }],
     });
 
     await imapInitialSync("acc-1");
 
-    // Threading should merge the two messages into one thread,
-    // so at least one placeholder thread (the one not chosen as thread ID) should be deleted
     expect(mockDeleteThread).toHaveBeenCalled();
   });
 });
 
 describe("imapDeltaSync — label merging for existing threads", () => {
   const mockGetAccount = vi.mocked(getAccount);
-  const mockImapListFolders = vi.mocked(imapListFolders);
-  const mockImapDeltaCheck = vi.mocked(imapDeltaCheck);
-  const mockImapFetchMessages = vi.mocked(imapFetchMessages);
+  const mockImapFullSync = vi.mocked(imapFullSync);
   const mockBatchUpsertThreads = vi.mocked(batchUpsertThreads);
   const mockSetThreadLabels = vi.mocked(setThreadLabels);
   const mockAddThreadLabels = vi.mocked(addThreadLabels);
@@ -748,42 +719,35 @@ describe("imapDeltaSync — label merging for existing threads", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.useFakeTimers();
     mockGetAccount.mockResolvedValue(createMockImapAccount({ id: "acc-1" }));
     mockGetThreadIdsByMessageIds.mockResolvedValue(new Map());
   });
 
   afterEach(() => {
-    vi.useRealTimers();
+    mockImapFullSync.mockReset();
   });
 
-  it("merges labels for existing threads instead of replacing them", async () => {
-    // Simulate: a thread already exists with INBOX + Sent labels.
-    // A new reply arrives in INBOX only. Delta sync should merge labels,
-    // not replace them (which would delete the Sent label).
-
+  function setupDeltaSync(newMsgs: ReturnType<typeof createMockImapMessage>[]) {
     const folders = [
       createMockImapFolder({ path: "INBOX", raw_path: "INBOX", exists: 10 }),
     ];
-    mockImapListFolders.mockResolvedValue(folders);
-
-    // Mock folder sync state
     vi.mocked(getAllFolderSyncStates).mockResolvedValue([
       { account_id: "acc-1", folder_path: "INBOX", last_uid: 100, uidvalidity: 1, modseq: null, last_sync_at: 1000 },
     ]);
-
-    // Delta check returns one new UID
-    mockImapDeltaCheck.mockResolvedValue([
-      {
+    mockImapFullSync.mockResolvedValue({
+      folders,
+      folder_results: [{
         folder: "INBOX",
-        uidvalidity: 1,
-        new_uids: [101],
+        uids: newMsgs.map(m => m.uid),
+        messages: newMsgs,
+        folder_status: createMockImapFolderStatus({ exists: 11, uidvalidity: 1 }),
         uidvalidity_changed: false,
-      },
-    ]);
+      }],
+    });
+  }
 
+  it("merges labels for existing threads instead of replacing them", async () => {
     const existingThreadId = "existing-thread-id";
-
     const newMsg = createMockImapMessage({
       uid: 101,
       message_id: "<new-reply@test>",
@@ -792,19 +756,11 @@ describe("imapDeltaSync — label merging for existing threads", () => {
       subject: "Re: Existing Thread",
       date: Math.floor(Date.now() / 1000),
     });
-    mockImapFetchMessages.mockResolvedValue({
-      messages: [newMsg],
-      folder_status: createMockImapFolderStatus({ exists: 11, uidvalidity: 1 }),
-    });
+    setupDeltaSync([newMsg]);
 
-    // The new message references <original@test>, which exists in the DB under
-    // the existingThreadId. getThreadIdsByMessageIds returns this mapping so the
-    // delta sync can remap the new thread group to the existing thread.
     mockGetThreadIdsByMessageIds.mockResolvedValue(
       new Map([["original@test", existingThreadId]]),
     );
-
-    // After remapping, getThreadsByIds is called with the existing thread ID
     mockGetThreadsByIds.mockImplementation(async (_accountId: string, threadIds: string[]) => {
       const existingThread = {
         id: existingThreadId,
@@ -816,14 +772,10 @@ describe("imapDeltaSync — label merging for existing threads", () => {
 
     await imapDeltaSync("acc-1");
 
-    // The new message should be remapped to the existing thread
     expect(mockGetThreadIdsByMessageIds).toHaveBeenCalledWith(
       "acc-1",
       expect.arrayContaining(["original@test"]),
     );
-
-    // For an existing thread, addThreadLabels should be called instead of setThreadLabels
-    // This preserves the Sent label while adding the INBOX label
     expect(mockAddThreadLabels).toHaveBeenCalledWith(
       "acc-1",
       existingThreadId,
@@ -832,30 +784,7 @@ describe("imapDeltaSync — label merging for existing threads", () => {
   });
 
   it("remaps thread ID when new message references existing thread", async () => {
-    // Simulate: buildThreads produces a different thread ID than the existing thread
-    // because it only sees the new message, not the full conversation.
-    // The remapping logic should detect the reference and use the existing thread ID.
-
-    const folders = [
-      createMockImapFolder({ path: "INBOX", raw_path: "INBOX", exists: 10 }),
-    ];
-    mockImapListFolders.mockResolvedValue(folders);
-
-    vi.mocked(getAllFolderSyncStates).mockResolvedValue([
-      { account_id: "acc-1", folder_path: "INBOX", last_uid: 100, uidvalidity: 1, modseq: null, last_sync_at: 1000 },
-    ]);
-
-    mockImapDeltaCheck.mockResolvedValue([
-      {
-        folder: "INBOX",
-        uidvalidity: 1,
-        new_uids: [101],
-        uidvalidity_changed: false,
-      },
-    ]);
-
     const existingThreadId = "existing-thread-abc";
-
     const newMsg = createMockImapMessage({
       uid: 101,
       message_id: "<reply-101@test>",
@@ -864,20 +793,12 @@ describe("imapDeltaSync — label merging for existing threads", () => {
       subject: "Re: Important Discussion",
       date: Math.floor(Date.now() / 1000),
     });
-    mockImapFetchMessages.mockResolvedValue({
-      messages: [newMsg],
-      folder_status: createMockImapFolderStatus({ exists: 11, uidvalidity: 1 }),
-    });
+    setupDeltaSync([newMsg]);
 
-    // The referenced message <msg-50@test> belongs to existingThreadId
     mockGetThreadIdsByMessageIds.mockResolvedValue(
       new Map([["msg-50@test", existingThreadId]]),
     );
-
-    // getThreadsByIds should be called with the REMAPPED existing thread ID,
-    // not the thread ID generated by buildThreads
     mockGetThreadsByIds.mockImplementation(async (_accountId: string, threadIds: string[]) => {
-      // Verify the thread ID is the remapped one, not a buildThreads-generated ID
       expect(threadIds).toContain(existingThreadId);
       const existingThread = {
         id: existingThreadId,
@@ -889,38 +810,18 @@ describe("imapDeltaSync — label merging for existing threads", () => {
 
     await imapDeltaSync("acc-1");
 
-    // Verify the new message is stored under the existing thread
     expect(mockBatchUpsertThreads).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({
           id: existingThreadId,
-          messageCount: 6, // 5 existing + 1 new
+          messageCount: 6,
         }),
       ]),
     );
   });
 
   it("uses setThreadLabels for new threads during delta sync", async () => {
-    // Simulate: a completely new thread — no existing thread found
     mockGetThreadsByIds.mockResolvedValue(new Map());
-
-    const folders = [
-      createMockImapFolder({ path: "INBOX", raw_path: "INBOX", exists: 10 }),
-    ];
-    mockImapListFolders.mockResolvedValue(folders);
-
-    vi.mocked(getAllFolderSyncStates).mockResolvedValue([
-      { account_id: "acc-1", folder_path: "INBOX", last_uid: 100, uidvalidity: 1, modseq: null, last_sync_at: 1000 },
-    ]);
-
-    mockImapDeltaCheck.mockResolvedValue([
-      {
-        folder: "INBOX",
-        uidvalidity: 1,
-        new_uids: [101],
-        uidvalidity_changed: false,
-      },
-    ]);
 
     const newMsg = createMockImapMessage({
       uid: 101,
@@ -928,64 +829,27 @@ describe("imapDeltaSync — label merging for existing threads", () => {
       subject: "Brand New Thread",
       date: Math.floor(Date.now() / 1000),
     });
-    mockImapFetchMessages.mockResolvedValue({
-      messages: [newMsg],
-      folder_status: createMockImapFolderStatus({ exists: 11, uidvalidity: 1 }),
-    });
+    setupDeltaSync([newMsg]);
 
     await imapDeltaSync("acc-1");
 
-    // For a new thread, setThreadLabels should be called
     expect(mockSetThreadLabels).toHaveBeenCalled();
     expect(mockAddThreadLabels).not.toHaveBeenCalled();
   });
 
   it("remaps thread by RFC Message-ID when In-Reply-To remapping fails", async () => {
-    // Simulate: a new message has no In-Reply-To/References headers,
-    // but its RFC Message-ID already exists in the DB under a different thread.
-    // The RFC-ID-based safety net should detect this and remap.
-
-    const folders = [
-      createMockImapFolder({ path: "INBOX", raw_path: "INBOX", exists: 10 }),
-    ];
-    mockImapListFolders.mockResolvedValue(folders);
-
-    vi.mocked(getAllFolderSyncStates).mockResolvedValue([
-      { account_id: "acc-1", folder_path: "INBOX", last_uid: 100, uidvalidity: 1, modseq: null, last_sync_at: 1000 },
-    ]);
-
-    mockImapDeltaCheck.mockResolvedValue([
-      {
-        folder: "INBOX",
-        uidvalidity: 1,
-        new_uids: [101],
-        uidvalidity_changed: false,
-      },
-    ]);
-
     const existingThreadId = "existing-thread-rfc";
-
-    // New message with no In-Reply-To — In-Reply-To remapping won't help
     const newMsg = createMockImapMessage({
       uid: 101,
       message_id: "<existing-msg@test>",
       subject: "Existing Thread",
       date: Math.floor(Date.now() / 1000),
     });
-    mockImapFetchMessages.mockResolvedValue({
-      messages: [newMsg],
-      folder_status: createMockImapFolderStatus({ exists: 11, uidvalidity: 1 }),
-    });
+    setupDeltaSync([newMsg]);
 
-    // The new message's RFC-ID (with angle brackets as stored in DB) already exists
-    // in the DB under existingThreadId. The safety net lookup uses the raw message_id
-    // from the IMAP message, which includes angle brackets.
     mockGetThreadIdsByMessageIds.mockResolvedValue(
       new Map([["<existing-msg@test>", existingThreadId]]),
     );
-
-    // First call: getThreadsByIds for buildThreads-generated ID (won't find it)
-    // Second call: after RFC-ID remapping, getThreadsByIds for existingThreadId
     mockGetThreadsByIds.mockImplementation(async (_accountId: string, threadIds: string[]) => {
       if (threadIds.includes(existingThreadId)) {
         const existingThread = {
@@ -1000,19 +864,16 @@ describe("imapDeltaSync — label merging for existing threads", () => {
 
     await imapDeltaSync("acc-1");
 
-    // Should use addThreadLabels for the existing thread, not setThreadLabels
     expect(mockAddThreadLabels).toHaveBeenCalledWith(
       "acc-1",
       existingThreadId,
       expect.any(Array),
     );
-
-    // Thread should be updated with incremented message count
     expect(mockBatchUpsertThreads).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({
           id: existingThreadId,
-          messageCount: 5, // 4 existing + 1 new
+          messageCount: 5,
         }),
       ]),
     );
