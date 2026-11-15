@@ -128,3 +128,47 @@ export async function getAttachmentsForMessage(
     [accountId, messageId],
   );
 }
+
+/**
+ * Fetch attachments across all accounts (for combined view mode).
+ */
+export async function getAttachmentsForAllAccounts(
+  accountIds: string[],
+  limit = 200,
+  offset = 0,
+): Promise<AttachmentWithContext[]> {
+  if (accountIds.length === 0) return [];
+  const db = await getDb();
+  const n = accountIds.length;
+  const placeholders = accountIds.map((_, i) => `$${i + 1}`).join(", ");
+  return db.select<AttachmentWithContext[]>(
+    `SELECT a.*, m.from_address, m.from_name, m.date, m.subject, m.thread_id
+     FROM attachments a
+     JOIN messages m ON a.message_id = m.id AND a.account_id = m.account_id
+     WHERE a.account_id IN (${placeholders}) AND a.filename IS NOT NULL AND a.filename != ''
+     ORDER BY m.date DESC
+     LIMIT $${n + 1} OFFSET $${n + 2}`,
+    [...accountIds, limit, offset] as unknown as any[],
+  );
+}
+
+/**
+ * Fetch attachment senders across all accounts (for combined view mode).
+ */
+export async function getAttachmentSendersForAllAccounts(
+  accountIds: string[],
+): Promise<AttachmentSender[]> {
+  if (accountIds.length === 0) return [];
+  const db = await getDb();
+  const placeholders = accountIds.map((_, i) => `$${i + 1}`).join(", ");
+  return db.select<AttachmentSender[]>(
+    `SELECT m.from_address, m.from_name, COUNT(*) as count
+     FROM attachments a
+     JOIN messages m ON a.message_id = m.id AND a.account_id = m.account_id
+     WHERE a.account_id IN (${placeholders}) AND a.filename IS NOT NULL AND a.filename != ''
+       AND m.from_address IS NOT NULL
+     GROUP BY m.from_address
+     ORDER BY count DESC`,
+    [...accountIds] as unknown as any[],
+  );
+}

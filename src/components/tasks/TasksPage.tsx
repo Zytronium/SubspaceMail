@@ -6,9 +6,11 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { useAccountStore } from "@/stores/accountStore";
+import { useUIStore } from "@/stores/uiStore";
 import { useTaskStore, type TaskGroupBy, type TaskFilterStatus } from "@/stores/taskStore";
 import {
   getTasksForAccount,
+  getTasksForAllAccounts,
   insertTask,
   completeTask,
   uncompleteTask,
@@ -35,6 +37,12 @@ export function TasksPage() {
   const accounts = useAccountStore((s) => s.accounts);
   const activeAccount = accounts.find((a) => a.isActive);
   const accountId = activeAccount?.id ?? null;
+  const accountViewMode = useUIStore((s) => s.accountViewMode);
+  const isCombinedMode = accountViewMode === "combined" && accounts.length > 1;
+  const combinedAccountIds = useMemo(
+    () => accounts.map((a) => a.id),
+    [accounts],
+  );
 
   const tasks = useTaskStore((s) => s.tasks);
   const setTasks = useTaskStore((s) => s.setTasks);
@@ -54,13 +62,27 @@ export function TasksPage() {
 
   // Load tasks
   const loadTasks = useCallback(async () => {
-    if (!accountId) return;
     const includeCompleted = filterStatus !== "incomplete";
-    const loaded = await getTasksForAccount(accountId, includeCompleted);
+    let loaded: DbTask[];
+    if (isCombinedMode) {
+      loaded = await getTasksForAllAccounts(combinedAccountIds, includeCompleted);
+    } else if (accountId) {
+      loaded = await getTasksForAccount(accountId, includeCompleted);
+    } else {
+      loaded = [];
+    }
     setTasks(loaded);
-    const count = await getIncompleteTaskCount(accountId);
-    useTaskStore.getState().setIncompleteCount(count);
-  }, [accountId, filterStatus, setTasks]);
+    if (isCombinedMode) {
+      // Count incomplete tasks across all accounts
+      const counts = await Promise.all(
+        combinedAccountIds.map((id) => getIncompleteTaskCount(id)),
+      );
+      useTaskStore.getState().setIncompleteCount(counts.reduce((a, b) => a + b, 0));
+    } else if (accountId) {
+      const count = await getIncompleteTaskCount(accountId);
+      useTaskStore.getState().setIncompleteCount(count);
+    }
+  }, [isCombinedMode, combinedAccountIds, accountId, filterStatus, setTasks]);
 
   useEffect(() => {
     loadTasks();

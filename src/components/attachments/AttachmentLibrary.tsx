@@ -3,9 +3,12 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { Paperclip, Search, LayoutGrid, List } from "lucide-react";
 import { useAccountStore } from "@/stores/accountStore";
+import { useUIStore } from "@/stores/uiStore";
 import {
   getAttachmentsForAccount,
+  getAttachmentsForAllAccounts,
   getAttachmentSenders,
+  getAttachmentSendersForAllAccounts,
   type AttachmentWithContext,
   type AttachmentSender,
 } from "@/services/db/attachments";
@@ -89,6 +92,8 @@ export function AttachmentLibrary() {
   const accounts = useAccountStore((s) => s.accounts);
   const activeAccount = accounts.find((a) => a.isActive);
   const accountId = activeAccount?.id ?? null;
+  const accountViewMode = useUIStore((s) => s.accountViewMode);
+  const isCombinedMode = accountViewMode === "combined" && accounts.length > 1;
 
   const [attachments, setAttachments] = useState<AttachmentWithContext[]>([]);
   const [senders, setSenders] = useState<AttachmentSender[]>([]);
@@ -102,13 +107,36 @@ export function AttachmentLibrary() {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [previewAttachment, setPreviewAttachment] = useState<AttachmentWithContext | null>(null);
 
-  const loadData = useCallback(async (acctId: string) => {
+  // Use refs to avoid re-triggering the effect when accounts change
+  const accountsRef = useRef(accounts);
+  const accountIdRef = useRef(accountId);
+  const isCombinedModeRef = useRef(isCombinedMode);
+  accountsRef.current = accounts;
+  accountIdRef.current = accountId;
+  isCombinedModeRef.current = isCombinedMode;
+
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [atts, snds] = await Promise.all([
-        getAttachmentsForAccount(acctId),
-        getAttachmentSenders(acctId),
-      ]);
+      const acctId = accountIdRef.current;
+      const combined = isCombinedModeRef.current;
+      const acctIds = accountsRef.current.map((a) => a.id);
+      let atts: AttachmentWithContext[];
+      let snds: AttachmentSender[];
+      if (combined) {
+        [atts, snds] = await Promise.all([
+          getAttachmentsForAllAccounts(acctIds),
+          getAttachmentSendersForAllAccounts(acctIds),
+        ]);
+      } else if (acctId) {
+        [atts, snds] = await Promise.all([
+          getAttachmentsForAccount(acctId),
+          getAttachmentSenders(acctId),
+        ]);
+      } else {
+        atts = [];
+        snds = [];
+      }
       setAttachments(atts);
       setSenders(snds);
     } catch (err) {
@@ -118,25 +146,19 @@ export function AttachmentLibrary() {
     }
   }, []);
 
-  // Load on account change
+  // Load on mount
   useEffect(() => {
-    if (accountId) {
-      loadData(accountId);
-    } else {
-      setAttachments([]);
-      setSenders([]);
-      setLoading(false);
-    }
-  }, [accountId, loadData]);
+    loadData();
+  }, [loadData]);
 
   // Refresh on sync
   useEffect(() => {
     const handler = () => {
-      if (accountId) loadData(accountId);
+      loadData();
     };
     window.addEventListener("subspacemail-sync-done", handler);
     return () => window.removeEventListener("subspacemail-sync-done", handler);
-  }, [accountId, loadData]);
+  }, [loadData]);
 
   const filtered = useMemo(() => {
     const q = searchQuery.toLowerCase();

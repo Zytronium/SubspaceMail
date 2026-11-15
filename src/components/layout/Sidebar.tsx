@@ -488,6 +488,43 @@ export function Sidebar({ collapsed, onAddAccount }: SidebarProps) {
           );
         })}
 
+        {/* Combined mode: special folders that aggregate across all accounts */}
+        {isCombinedMode && accounts.length > 1 && (
+          <>
+            {ALL_NAV_ITEMS
+              .filter((item) => item.id === "all" || item.id === "attachments" || item.id === "tasks" || item.id === "calendar")
+              .map((item) => {
+                const Icon = item.icon;
+                const isActive = activeLabel === item.id;
+                return (
+                  <DroppableNavItem
+                    key={item.id}
+                    id={item.id}
+                    isActive={isActive}
+                    collapsed={collapsed}
+                    onClick={() => navigateToLabel(item.id)}
+                    onContextMenu={(e) => handleNavContextMenu(e, item.id)}
+                    title={collapsed ? item.label : undefined}
+                  >
+                    {() => (
+                      <>
+                        <Icon size={18} className="shrink-0" />
+                        {!collapsed && (
+                          <span className="flex-1 truncate">{item.label}</span>
+                        )}
+                        {item.id === "tasks" && taskIncompleteCount > 0 && !collapsed && (
+                          <span className="text-[0.625rem] bg-accent/15 text-accent px-1.5 rounded-full leading-normal">
+                            {taskIncompleteCount}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </DroppableNavItem>
+                );
+              })}
+          </>
+        )}
+
         {/* Combined mode: account groups with per-account folders */}
         {isCombinedMode && accounts.length > 1 && !collapsed && (
           <div className="pt-4">

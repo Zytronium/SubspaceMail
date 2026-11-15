@@ -49,6 +49,31 @@ export async function getTasksForAccount(
   );
 }
 
+/**
+ * Fetch tasks across all accounts (for combined view mode).
+ * Includes tasks with NULL account_id (global tasks) as well.
+ */
+export async function getTasksForAllAccounts(
+  accountIds: string[],
+  includeCompleted = false,
+): Promise<DbTask[]> {
+  if (accountIds.length === 0) return [];
+  const db = await getDb();
+  const placeholders = accountIds.map((_, i) => `$${i + 1}`).join(", ");
+  if (includeCompleted) {
+    return db.select<DbTask[]>(
+      `SELECT * FROM tasks WHERE (account_id IN (${placeholders}) OR account_id IS NULL) AND parent_id IS NULL
+       ORDER BY is_completed ASC, sort_order ASC, created_at DESC`,
+      [...accountIds] as unknown as any[],
+    );
+  }
+  return db.select<DbTask[]>(
+    `SELECT * FROM tasks WHERE (account_id IN (${placeholders}) OR account_id IS NULL) AND parent_id IS NULL AND is_completed = 0
+     ORDER BY sort_order ASC, created_at DESC`,
+    [...accountIds] as unknown as any[],
+  );
+}
+
 export async function getTaskById(id: string): Promise<DbTask | null> {
   const db = await getDb();
   const rows = await db.select<DbTask[]>(

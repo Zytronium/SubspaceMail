@@ -10,9 +10,17 @@ vi.mock("@/stores/accountStore", () => ({
   ),
 }));
 
+vi.mock("@/stores/uiStore", () => ({
+  useUIStore: vi.fn((selector: (s: { accountViewMode: string }) => unknown) =>
+    selector({ accountViewMode: "separate" }),
+  ),
+}));
+
 vi.mock("@/services/db/attachments", () => ({
   getAttachmentsForAccount: vi.fn(() => Promise.resolve([])),
   getAttachmentSenders: vi.fn(() => Promise.resolve([])),
+  getAttachmentsForAllAccounts: vi.fn(() => Promise.resolve([])),
+  getAttachmentSendersForAllAccounts: vi.fn(() => Promise.resolve([])),
 }));
 
 vi.mock("@/services/email/providerFactory", () => ({
@@ -35,7 +43,7 @@ vi.mock("@/router/navigate", () => ({
   navigateToLabel: vi.fn(),
 }));
 
-import { getAttachmentsForAccount, getAttachmentSenders } from "@/services/db/attachments";
+import { getAttachmentsForAccount, getAttachmentSenders, getAttachmentsForAllAccounts, getAttachmentSendersForAllAccounts } from "@/services/db/attachments";
 
 const mockAttachments: AttachmentWithContext[] = [
   {
