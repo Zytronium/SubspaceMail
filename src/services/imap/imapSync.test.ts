@@ -9,6 +9,7 @@ vi.mock("./tauriCommands", () => ({
   imapSearchAllUids: vi.fn(),
   imapSearchFolder: vi.fn(),
   imapDeltaCheck: vi.fn(),
+  imapSyncFolder: vi.fn(),
 }));
 vi.mock("./imapConfigBuilder", () => ({
   buildImapConfig: vi.fn(() => ({
@@ -77,7 +78,7 @@ import {
   createMockImapFolderStatus,
   createMockImapFetchResult,
 } from "@/test/mocks";
-import { imapListFolders, imapSearchFolder, imapFetchMessages } from "./tauriCommands";
+import { imapListFolders, imapSyncFolder, imapFetchMessages } from "./tauriCommands";
 import { getAccount } from "../db/accounts";
 import { upsertMessage, batchUpsertMessages, updateMessageThreadIds } from "../db/messages";
 import { upsertThread, batchUpsertThreads, deleteThread } from "../db/threads";
@@ -252,7 +253,7 @@ describe("imapMessageToParsedMessage", () => {
 describe("imapInitialSync", () => {
   const mockGetAccount = vi.mocked(getAccount);
   const mockImapListFolders = vi.mocked(imapListFolders);
-  const mockImapSearchFolder = vi.mocked(imapSearchFolder);
+  const mockImapSyncFolder = vi.mocked(imapSyncFolder);
   const mockImapFetchMessages = vi.mocked(imapFetchMessages);
   const mockBatchUpsertMessages = vi.mocked(batchUpsertMessages);
   const mockUpdateMessageThreadIds = vi.mocked(updateMessageThreadIds);
@@ -267,7 +268,7 @@ describe("imapInitialSync", () => {
 
   afterEach(() => {
     // Reset persistent mock implementations to prevent leaking between describe blocks
-    mockImapSearchFolder.mockReset();
+    mockImapSyncFolder.mockReset();
     mockImapFetchMessages.mockReset();
     mockImapListFolders.mockReset();
     vi.useRealTimers();
@@ -281,15 +282,12 @@ describe("imapInitialSync", () => {
       exists: messages.length,
     });
     mockImapListFolders.mockResolvedValue([mockFolder]);
-    // imapSearchFolder returns UIDs + folder status (no message bodies)
-    mockImapSearchFolder.mockResolvedValue({
+    // imapSyncFolder returns UIDs + full messages in a single connection
+    mockImapSyncFolder.mockResolvedValue({
       uids: messages.map((m) => m.uid),
+      messages,
       folder_status: createMockImapFolderStatus({ exists: messages.length }),
     });
-    // imapFetchMessages returns full messages for the requested UIDs
-    mockImapFetchMessages.mockResolvedValue(
-      createMockImapFetchResult(messages),
-    );
     return mockFolder;
   }
 
@@ -420,7 +418,7 @@ describe("imapInitialSync", () => {
 
     const result = await imapInitialSync("acc-1");
 
-    expect(mockImapSearchFolder).not.toHaveBeenCalled();
+    expect(mockImapSyncFolder).not.toHaveBeenCalled();
     expect(mockBatchUpsertMessages).not.toHaveBeenCalled();
     expect(result.messages).toEqual([]);
   });
@@ -442,26 +440,19 @@ describe("imapInitialSync", () => {
     expect(phases).toContain("done");
   });
 
-  it("uses imapSearchFolder + imapFetchMessages for chunked sync per folder", async () => {
+  it("uses imapSyncFolder for single-connection sync per folder", async () => {
     const msg = createMockImapMessage({ uid: 1, message_id: "<m1@test>", date: Math.floor(Date.now() / 1000) });
     setupFolderWithMessages("INBOX", [msg]);
 
     await imapInitialSync("acc-1");
 
-    // Should use imapSearchFolder (lightweight search) with SINCE date filter
-    expect(mockImapSearchFolder).toHaveBeenCalledTimes(1);
-    expect(mockImapSearchFolder).toHaveBeenCalledWith(
+    // Should use imapSyncFolder (single connection: SELECT → SEARCH → FETCH)
+    expect(mockImapSyncFolder).toHaveBeenCalledTimes(1);
+    expect(mockImapSyncFolder).toHaveBeenCalledWith(
       expect.objectContaining({ host: "imap.example.com" }),
       "INBOX",
+      expect.any(Number), // batchSize
       expect.stringMatching(/^\d{1,2}-[A-Z][a-z]{2}-\d{4}$/), // sinceDate in DD-Mon-YYYY format
-    );
-
-    // Then fetch the messages by UID
-    expect(mockImapFetchMessages).toHaveBeenCalledTimes(1);
-    expect(mockImapFetchMessages).toHaveBeenCalledWith(
-      expect.objectContaining({ host: "imap.example.com" }),
-      "INBOX",
-      [1], // UIDs from search
     );
   });
 
@@ -481,44 +472,29 @@ describe("imapInitialSync", () => {
     expect(mockBatchUpsertThreads).toHaveBeenCalled();
   });
 
-  it("continues to next chunk on fetch error", async () => {
-    const msg1 = createMockImapMessage({ uid: 1, message_id: "<m1@test>", date: Math.floor(Date.now() / 1000) });
-    const msg2 = createMockImapMessage({ uid: 201, message_id: "<m2@test>", date: Math.floor(Date.now() / 1000) });
+  it("continues on folder sync error", async () => {
+    const folders = [
+      createMockImapFolder({ path: "INBOX", raw_path: "INBOX", exists: 2 }),
+      createMockImapFolder({ path: "Sent", raw_path: "Sent", exists: 1 }),
+    ];
+    mockImapListFolders.mockResolvedValue(folders);
 
-    const mockFolder = createMockImapFolder({ path: "INBOX", raw_path: "INBOX", exists: 2 });
-    mockImapListFolders.mockResolvedValue([mockFolder]);
+    const msg = createMockImapMessage({ uid: 1, message_id: "<m1@test>", date: Math.floor(Date.now() / 1000) });
 
-    // Return UIDs in two "chunks" (we'll set CHUNK_SIZE to 200 but have UIDs 1 and 201)
-    mockImapSearchFolder.mockResolvedValue({
-      uids: [1, 201],
-      folder_status: createMockImapFolderStatus({ exists: 2 }),
-    });
-
-    // First chunk fetch succeeds, but because both UIDs are in the same chunk (< 200),
-    // we test error handling by making imapFetchMessages fail on first call and succeed on retry
-    mockImapFetchMessages
-      .mockRejectedValueOnce(new Error("fetch timeout"))
-      .mockResolvedValueOnce(createMockImapFetchResult([msg2]));
-
-    // This won't exercise the multi-chunk path since 2 UIDs < 200 chunk size.
-    // Instead test that a search failure at folder level is handled.
-    // Reset and use a simpler approach: single chunk that fails
-    vi.clearAllMocks();
-    mockGetAccount.mockResolvedValue(createMockImapAccount({ id: "acc-1" }));
-
-    const msgs = Array.from({ length: 2 }, (_, i) =>
-      createMockImapMessage({ uid: i + 1, message_id: `<m${i}@test>`, date: Math.floor(Date.now() / 1000) }),
-    );
-    setupFolderWithMessages("INBOX", msgs);
-
-    // Even if imapFetchMessages fails for one chunk, the folder-level error is caught
-    mockImapFetchMessages.mockRejectedValueOnce(new Error("chunk fetch failed"));
+    // First folder fails, second succeeds
+    mockImapSyncFolder
+      .mockRejectedValueOnce(new Error("folder sync failed"))
+      .mockResolvedValueOnce({
+        uids: [msg.uid],
+        messages: [msg],
+        folder_status: createMockImapFolderStatus({ exists: 1 }),
+      });
 
     const syncPromise = imapInitialSync("acc-1");
     await vi.runAllTimersAsync();
     const result = await syncPromise;
 
-    // Sync should complete without throwing
+    // Sync should complete — second folder succeeded
     expect(result.messages).toEqual([]);
   });
 
@@ -527,7 +503,7 @@ describe("imapInitialSync", () => {
       createMockImapFolder({ path: `folder-${i}`, raw_path: `folder-${i}`, exists: 10 }),
     );
     mockImapListFolders.mockResolvedValue(folders);
-    mockImapSearchFolder.mockRejectedValue(new Error("TCP connect timed out (os error 60)"));
+    mockImapSyncFolder.mockRejectedValue(new Error("TCP connect timed out (os error 60)"));
 
     // Advance timers and catch the expected error in one go to avoid
     // Vitest's unhandled-rejection tracker from flagging it.
@@ -543,7 +519,7 @@ describe("imapInitialSync", () => {
     expect(caughtError!.message).toContain("All folders failed to sync");
 
     // Circuit breaker should stop after 5 failures (CIRCUIT_BREAKER_MAX_FAILURES)
-    expect(mockImapSearchFolder).toHaveBeenCalledTimes(5);
+    expect(mockImapSyncFolder).toHaveBeenCalledTimes(5);
   });
 
   it("circuit breaker resets on successful folder sync", async () => {
@@ -558,23 +534,22 @@ describe("imapInitialSync", () => {
     const msg = createMockImapMessage({ uid: 1, message_id: "<m1@test>", date: Math.floor(Date.now() / 1000) });
 
     // First 2 fail with connection error, 3rd succeeds, 4th fails
-    mockImapSearchFolder
+    mockImapSyncFolder
       .mockRejectedValueOnce(new Error("TCP connect timed out"))
       .mockRejectedValueOnce(new Error("TCP connect timed out"))
       .mockResolvedValueOnce({
         uids: [msg.uid],
+        messages: [msg],
         folder_status: createMockImapFolderStatus({ exists: 1 }),
       })
       .mockRejectedValueOnce(new Error("TCP connect timed out"));
-
-    mockImapFetchMessages.mockResolvedValue(createMockImapFetchResult([msg]));
 
     const syncPromise = imapInitialSync("acc-1");
     await vi.runAllTimersAsync();
     await syncPromise;
 
     // All 4 folders should be attempted (circuit breaker resets after success on f3)
-    expect(mockImapSearchFolder).toHaveBeenCalledTimes(4);
+    expect(mockImapSyncFolder).toHaveBeenCalledTimes(4);
   });
 
   it("continues on non-connection errors without triggering circuit breaker", async () => {
@@ -584,7 +559,7 @@ describe("imapInitialSync", () => {
     mockImapListFolders.mockResolvedValue(folders);
 
     // Non-connection errors should NOT trigger circuit breaker
-    mockImapSearchFolder.mockRejectedValue(new Error("PARSE failed: invalid response"));
+    mockImapSyncFolder.mockRejectedValue(new Error("PARSE failed: invalid response"));
 
     let caughtError: Error | null = null;
     const syncPromise = imapInitialSync("acc-1").catch((err: Error) => {
@@ -598,7 +573,7 @@ describe("imapInitialSync", () => {
     expect(caughtError!.message).toContain("All folders failed to sync");
 
     // All folders should be attempted since these aren't connection errors
-    expect(mockImapSearchFolder).toHaveBeenCalledTimes(6);
+    expect(mockImapSyncFolder).toHaveBeenCalledTimes(6);
   });
 });
 
@@ -674,7 +649,7 @@ describe("isConnectionError", () => {
 describe("imapInitialSync — all-folders-fail propagation", () => {
   const mockGetAccount = vi.mocked(getAccount);
   const mockImapListFolders = vi.mocked(imapListFolders);
-  const mockImapSearchFolder = vi.mocked(imapSearchFolder);
+  const mockImapSyncFolder = vi.mocked(imapSyncFolder);
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -683,8 +658,7 @@ describe("imapInitialSync — all-folders-fail propagation", () => {
   });
 
   afterEach(() => {
-    // Reset search mock implementation to prevent leaking into subsequent tests
-    mockImapSearchFolder.mockReset();
+    mockImapSyncFolder.mockReset();
     vi.useRealTimers();
   });
 
@@ -694,7 +668,7 @@ describe("imapInitialSync — all-folders-fail propagation", () => {
       createMockImapFolder({ path: "Sent", raw_path: "Sent", exists: 5 }),
     ];
     mockImapListFolders.mockResolvedValue(folders);
-    mockImapSearchFolder.mockRejectedValue("authentication failed");
+    mockImapSyncFolder.mockRejectedValue("authentication failed");
 
     let caughtError: Error | null = null;
     const syncPromise = imapInitialSync("acc-1").catch((err: Error) => {
@@ -711,8 +685,7 @@ describe("imapInitialSync — all-folders-fail propagation", () => {
 describe("imapInitialSync — placeholder cleanup", () => {
   const mockGetAccount = vi.mocked(getAccount);
   const mockImapListFolders = vi.mocked(imapListFolders);
-  const mockImapSearchFolder = vi.mocked(imapSearchFolder);
-  const mockImapFetchMessages = vi.mocked(imapFetchMessages);
+  const mockImapSyncFolder = vi.mocked(imapSyncFolder);
   const mockDeleteThread = vi.mocked(deleteThread);
 
   beforeEach(() => {
@@ -744,11 +717,11 @@ describe("imapInitialSync — placeholder cleanup", () => {
 
     const mockFolder = createMockImapFolder({ path: "INBOX", raw_path: "INBOX", exists: 2 });
     mockImapListFolders.mockResolvedValue([mockFolder]);
-    mockImapSearchFolder.mockResolvedValue({
+    mockImapSyncFolder.mockResolvedValue({
       uids: [1, 2],
+      messages: [msg1, msg2],
       folder_status: createMockImapFolderStatus({ exists: 2 }),
     });
-    mockImapFetchMessages.mockResolvedValue(createMockImapFetchResult([msg1, msg2]));
 
     await imapInitialSync("acc-1");
 
