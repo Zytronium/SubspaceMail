@@ -82,9 +82,15 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
 
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  // Counter that triggers a reload when sync completes — separate from syncStatus
+  // so that sync status updates during sync don't cause unnecessary reloads
+  const [syncRefreshCounter, setSyncRefreshCounter] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   // Track the current load generation to cancel stale async loads
   const loadGenRef = useRef(0);
+  // Cache threads per folder key so we can show them immediately when switching folders,
+  // then update from the DB in the background. This makes folder switches feel instant.
+  const cachedThreadsByFolderRef = useRef<Map<string, Thread[]>>(new Map());
   const [categoryMap, setCategoryMap] = useState<Map<string, string>>(() => new Map());
   const [categoryUnreadCounts, setCategoryUnreadCounts] = useState<Map<string, number>>(() => new Map());
   const [followUpThreadIds, setFollowUpThreadIds] = useState<Set<string>>(() => new Set());
@@ -281,11 +287,22 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
   useEffect(() => {
     if (!resolvedAccountId) {
       setThreads([]);
+      cachedThreadsByFolderRef.current.clear();
       return;
     }
 
     // Increment generation to invalidate any in-flight loads from previous calls
     const gen = ++loadGenRef.current;
+
+    // Build a key that identifies the current folder/account view
+    const folderKey = `${resolvedAccountId}|${activeLabel}|${activeCategory}|${isSmartFolder ? activeSmartFolder?.id : ''}`;
+
+    // Show cached threads immediately for instant folder switching
+    const cachedForFolder = cachedThreadsByFolderRef.current.get(folderKey);
+    if (cachedForFolder && cachedForFolder.length > 0) {
+      setThreads(cachedForFolder);
+      setHasMore(false);
+    }
 
     clearSearch();
     setLoading(true);
@@ -305,6 +322,7 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
           const mapped = await mapSmartFolderRows(rows);
           // Only apply results if this is still the current load
           if (gen === loadGenRef.current) {
+            cachedThreadsByFolderRef.current.set(folderKey, mapped);
             setThreads(mapped);
             setHasMore(false); // Smart folders load all at once
             setLoading(false);
@@ -337,6 +355,7 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
           const mapped = await mapDbThreads(dbThreads);
           // Only apply results if this is still the current load
           if (gen === loadGenRef.current) {
+            cachedThreadsByFolderRef.current.set(folderKey, mapped);
             setThreads(mapped);
             setHasMore(dbThreads.length === PAGE_SIZE);
             setLoading(false);
@@ -351,7 +370,7 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
     };
 
     doLoad();
-  }, [routeAccountId, activeAccountId, activeLabel, activeCategory, isSmartFolder, activeSmartFolder, isCombinedMode, isSpecificAccountView, combinedAccountIds, setThreads, setLoading, mapDbThreads, clearSearch]);
+  }, [routeAccountId, activeAccountId, activeLabel, activeCategory, isSmartFolder, activeSmartFolder, isCombinedMode, isSpecificAccountView, combinedAccountIds, setThreads, setLoading, mapDbThreads, clearSearch, syncRefreshCounter]);
 
   // Load more threads - stable callback for scroll handler
   const loadMore = useCallback(async () => {
@@ -514,16 +533,13 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
   }, [selectedThreadId]);
 
   // Listen for sync completion to reload (debounced to avoid waterfall from multiple emitters)
-  // Incrementing loadGenRef forces the load effect to re-run on the next render
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const handler = () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
-        // Increment generation counter to invalidate any stale state,
-        // then force a re-render so the load effect re-runs
-        loadGenRef.current++;
-        setHasMore(h => !h && h || !!h); // toggle hasMore to force re-render
+        // Increment the refresh counter to trigger the load effect to re-run
+        setSyncRefreshCounter(c => c + 1);
       }, 500);
     };
     window.addEventListener("subspacemail-sync-done", handler);

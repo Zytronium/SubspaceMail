@@ -21,6 +21,7 @@ const VALID_CATEGORIES = ["Primary", "Updates", "Promotions", "Social", "Newslet
 type MailSearch = {
   q?: string;
   category?: (typeof VALID_CATEGORIES)[number];
+  accountId?: string;
 };
 
 function validateMailSearch(search: Record<string, unknown>): MailSearch {
@@ -31,6 +32,9 @@ function validateMailSearch(search: Record<string, unknown>): MailSearch {
   const cat = search["category"];
   if (typeof cat === "string" && (VALID_CATEGORIES as readonly string[]).includes(cat)) {
     result.category = cat as MailSearch["category"];
+  }
+  if (typeof search["accountId"] === "string" && search["accountId"]) {
+    result.accountId = search["accountId"];
   }
   return result;
 }

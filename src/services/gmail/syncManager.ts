@@ -97,9 +97,10 @@ async function syncImapAccount(accountId: string): Promise<void> {
   const syncPeriodStr = await getSetting("sync_period_days");
   const syncDays = parseInt(syncPeriodStr ?? "365", 10) || 365;
 
-  // Pre-sync check: if there are broken messages (raw MIME stored instead of parsed HTML/text),
-  // force a full re-sync BEFORE running delta sync. This catches the case where the initial
-  // sync stored broken data and delta sync can't fix it.
+  // Pre-sync check: if there are broken messages (raw MIME content stored instead of parsed
+  // HTML/text — a known mail-parser bug with multipart/related), force a full re-sync.
+  // Note: messages with legitimately empty bodies are NOT counted as broken, as re-syncing
+  // them would produce the same empty bodies, causing an infinite re-sync loop.
   const preSyncBrokenCount = await countBrokenMessagesForAccount(accountId);
   if (preSyncBrokenCount > 0) {
     console.warn(
@@ -155,7 +156,9 @@ async function syncImapAccount(accountId: string): Promise<void> {
     // Force a full re-sync to recover.
     // Also recover if folder sync states exist but have last_uid = 0,
     // meaning the initial sync saved state without actually storing messages.
-    // Also recover if messages have broken body content (raw MIME or empty bodies).
+    // Also recover if messages have broken body content (raw MIME stored instead of
+    // parsed HTML/text — a mail-parser bug). Note: empty bodies are NOT counted
+    // as broken, as re-syncing would produce the same result.
     // Note: do NOT trigger recovery just because all folders have 0 new UIDs —
     // that is normal when no new mail has arrived since the last sync.
     if (result.messages.length === 0) {

@@ -211,13 +211,13 @@ export async function getThreadIdsByMessageIds(
 
 /**
  * Count messages with broken body content.
- * Broken messages are those where:
- * 1. body_html or body_text starts with MIME boundaries (`--`), indicating raw multipart
- *    content was stored instead of parsed HTML/text (mail-parser issue).
- * 2. Both body_html and body_text are NULL or empty AND the message has an imap_uid
- *    set, indicating the IMAP fetch returned no body data (async-imap parsing issue).
- *    We require imap_folder IS NOT NULL to avoid counting legitimate plain-text emails
- *    that simply have no HTML part.
+ * Broken messages are those where body_html or body_text starts with MIME boundaries
+ * (`--`), indicating raw multipart content was stored instead of parsed HTML/text
+ * (a known mail-parser issue with multipart/related structures).
+ *
+ * Messages with legitimately empty bodies (e.g., auto-generated notifications,
+ * calendar invites with no text body) are NOT counted as broken — re-syncing
+ * them would produce the same empty bodies, causing an infinite re-sync loop.
  */
 export async function countBrokenMessagesForAccount(accountId: string): Promise<number> {
   const db = await getDb();
@@ -225,13 +225,9 @@ export async function countBrokenMessagesForAccount(accountId: string): Promise<
     `SELECT COUNT(*) AS count FROM messages
      WHERE account_id = $1
        AND (
-         -- Raw MIME content stored instead of parsed HTML/text
+         -- Raw MIME content stored instead of parsed HTML/text (mail-parser bug)
          body_html LIKE '--%'
          OR body_text LIKE '--%'
-         -- Both body_html and body_text are missing for an IMAP message (empty fetch)
-         OR ((body_html IS NULL OR TRIM(body_html) = '')
-             AND (body_text IS NULL OR TRIM(body_text) = '')
-             AND imap_folder IS NOT NULL)
        )`,
     [accountId],
   );
