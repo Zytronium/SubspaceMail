@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.4.25](https://github.com/Zytronium/SubspaceMail/compare/velo-v0.4.24...velo-v0.4.25) (2026-11-15)
+
+
+### Features
+
+* Added setting to choose between keeping accounts' folders combined or separate, defaulted to combined like most email clients ([a3a5443](https://github.com/Zytronium/SubspaceMail/commit/a3a5443ea7650fd0490931db51c7de7b4b9de640))
+* Email syncing in IMAP connections is now about significantly faster than before ([9fc882e](https://github.com/Zytronium/SubspaceMail/commit/9fc882e6cc1c4f6a94d4c165e02bb3342fbb5ddf))
+
+
+### Bug Fixes
+
+* auto updater doesn't work ([07043e3](https://github.com/Zytronium/SubspaceMail/commit/07043e34efbc0ba9c1dfad0347f931ec69d51e30))
+* Cached messages don't load instantly on launch and instead wait for background sync ([cc462bc](https://github.com/Zytronium/SubspaceMail/commit/cc462bc68015f3fcce79675832cc48ff568c9c3c))
+* Email syncing is extremely slow ([6c90759](https://github.com/Zytronium/SubspaceMail/commit/6c907594c44d7085a5968d65146345f15dde790c))
+* fix windows build and pin version back to correct version 0.4.22 ([7fda62a](https://github.com/Zytronium/SubspaceMail/commit/7fda62a602dbba05f6ae4f5d4bc248f868dbff3c))
+* IMAP sync is slow sometimes due to failing to load and falling back to raw TCP fetch and emails periodically all disappear and reappear ([93306b5](https://github.com/Zytronium/SubspaceMail/commit/93306b5eafb38314132445fc74aa68a28196889b))
+* Miscellaneous bugs related to email syncing and displaying ([66a7c5b](https://github.com/Zytronium/SubspaceMail/commit/66a7c5baf16ffa821b38f7bc2b851240da6b6eb1))
+* Partial fix for emails disappearing during resync ([e68545e](https://github.com/Zytronium/SubspaceMail/commit/e68545ea8ca84792457a81cc6b63d34cef4299d0))
+* remove native title bar that shows in addition to custom title bar ([997f207](https://github.com/Zytronium/SubspaceMail/commit/997f207bfe2be63d46c5d39f792261f04a76daee))
+* The title bar is not always on top, causing it to be blurred and un-interactable when modals like the email composer pop up ([3b375dd](https://github.com/Zytronium/SubspaceMail/commit/3b375dd22c077a2990fd26357fab3f0b82c9411d))
+
 ## [0.4.24](https://github.com/Zytronium/SubspaceMail/compare/velo-v0.4.23...velo-v0.4.24) (2026-11-14)
 
 
