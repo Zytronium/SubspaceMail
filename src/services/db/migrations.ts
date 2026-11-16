@@ -834,6 +834,42 @@ const MIGRATIONS = [
       UPDATE accounts SET avatar_url = NULL;
     `,
   },
+  {
+    version: 31,
+    description: "Add Logo.dev company logos and clear all avatars for fresh fetch",
+    sql: `
+      UPDATE contacts SET avatar_url = NULL;
+      UPDATE accounts SET avatar_url = NULL;
+    `,
+  },
+  {
+    version: 32,
+    description: "Bake Logo.dev key into app and clear all avatars for fresh fetch",
+    sql: `
+      UPDATE contacts SET avatar_url = NULL;
+      UPDATE accounts SET avatar_url = NULL;
+    `,
+  },
+  {
+    version: 33,
+    description: "Fix duplicate thread IDs caused by 32-bit hash collisions — merge collided threads",
+    sql: `
+      -- Delete duplicate thread rows, keeping the one with the lowest rowid per (account_id, id).
+      -- Messages referencing deleted threads will have stale thread_id values, but the
+      -- new 64-bit hash in generateThreadId() prevents future collisions.
+      DELETE FROM threads WHERE rowid NOT IN (
+        SELECT MIN(rowid) FROM threads GROUP BY account_id, id
+      );
+    `,
+  },
+  {
+    version: 34,
+    description: "Remove Logo.dev (returns favicons) and clear all avatars — only Gravatar allowed",
+    sql: `
+      UPDATE contacts SET avatar_url = NULL;
+      UPDATE accounts SET avatar_url = NULL;
+    `,
+  },
 ];
 
 /**

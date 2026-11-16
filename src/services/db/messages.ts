@@ -107,6 +107,7 @@ export async function batchUpsertMessages(messages: UpsertMessageInput[]): Promi
   await db.execute(
     `INSERT INTO messages (${cols}) VALUES ${placeholders}
      ON CONFLICT(account_id, id) DO UPDATE SET
+       thread_id = excluded.thread_id,
        from_address = excluded.from_address, from_name = excluded.from_name,
        to_addresses = excluded.to_addresses, cc_addresses = excluded.cc_addresses,
        bcc_addresses = excluded.bcc_addresses, reply_to = excluded.reply_to,

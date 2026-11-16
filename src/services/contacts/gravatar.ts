@@ -99,14 +99,14 @@ export function getGravatarUrl(email: string): string {
 /**
  * Check if a cached avatar URL is from a valid source.
  * Accepts only Gravatar and Google OAuth profile pictures.
- * All other sources (favicons, domain logos, Hunter.io) are rejected.
+ * All other sources (favicons, domain logos, Logo.dev, Hunter.io) are rejected.
  */
 export function isValidAvatarUrl(url: string): boolean {
-  // Gravatar is the only valid avatar source
+  // Gravatar is valid
   if (url.includes("gravatar.com")) return true;
   // Google profile pictures from OAuth — valid (but not favicon endpoints)
   if (url.includes(".googleusercontent.com/") && !url.includes("/favicon")) return true;
-  // Everything else is rejected — no favicons, no domain logos, no Hunter.io
+  // Everything else is rejected — no favicons, no domain logos, no Logo.dev, no Hunter.io
   return false;
 }
 
@@ -140,7 +140,7 @@ export async function fetchAndCacheGravatarUrl(email: string): Promise<string | 
  * Unified avatar fetcher.
  * Returns the best available avatar URL for the given email.
  * Priority: cached avatar > Gravatar > null
- * All domain logo sources (BIMI DNS, Hunter.io) are excluded to prevent favicons.
+ * All favicon and company logo sources are excluded.
  */
 export async function fetchAvatarUrl(email: string): Promise<string | null> {
   // 1. Check if we already have a cached avatar

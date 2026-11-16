@@ -12,8 +12,7 @@ const avatarCache = new Map<string, string | null>();
 /**
  * Hook that returns the avatar URL for a given email address.
  * Respects the loadAvatars setting — returns null immediately when disabled.
- * Priority: cached avatar > Gravatar.
- * All domain logo sources removed to prevent favicons.
+ * Priority: cached avatar > Gravatar > null.
  */
 export function useAvatar(email: string | null): string | null {
   const loadAvatars = useUIStore((s) => s.loadAvatars);

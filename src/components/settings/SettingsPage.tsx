@@ -578,7 +578,7 @@ export function SettingsPage() {
                     )}
                     <ToggleRow
                       label="Load avatars and logos"
-                      description="Fetches contact avatars from Gravatar and company logos from public sources (Hunter.io, BIMI DNS). Disabling prevents external requests that reveal which contacts you view."
+                      description="Fetches contact avatars from Gravatar and company logos from Logo.dev. Disabling prevents external requests that reveal which contacts you view."
                       checked={loadAvatars}
                       onToggle={() => setLoadAvatars(!loadAvatars)}
                     />
