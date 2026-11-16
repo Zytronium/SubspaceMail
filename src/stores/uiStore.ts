@@ -35,10 +35,12 @@ interface UIState {
   taskSidebarVisible: boolean;
   sidebarNavConfig: SidebarNavItem[] | null;
   reduceMotion: boolean;
+  loadAvatars: boolean;
   isOnline: boolean;
   pendingOpsCount: number;
   isSyncingFolder: string | null;
   syncStatus: string | null;
+  setLoadAvatars: (load: boolean) => void;
   setTheme: (theme: Theme) => void;
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
@@ -84,6 +86,7 @@ export const useUIStore = create<UIState>((set) => ({
   taskSidebarVisible: false,
   sidebarNavConfig: null,
   reduceMotion: false,
+  loadAvatars: true,
   isOnline: true,
   pendingOpsCount: 0,
   isSyncingFolder: null,
@@ -163,6 +166,10 @@ export const useUIStore = create<UIState>((set) => ({
   setReduceMotion: (reduceMotion) => {
     setSetting("reduce_motion", String(reduceMotion)).catch(() => {});
     set({ reduceMotion });
+  },
+  setLoadAvatars: (loadAvatars) => {
+    setSetting("load_avatars", String(loadAvatars)).catch(() => {});
+    set({ loadAvatars });
   },
   setOnline: (isOnline) => set({ isOnline }),
   setPendingOpsCount: (pendingOpsCount) => set({ pendingOpsCount }),

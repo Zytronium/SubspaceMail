@@ -99,6 +99,8 @@ export function SettingsPage() {
   const setAccountViewMode = useUIStore((s) => s.setAccountViewMode);
   const reduceMotion = useUIStore((s) => s.reduceMotion);
   const setReduceMotion = useUIStore((s) => s.setReduceMotion);
+  const loadAvatars = useUIStore((s) => s.loadAvatars);
+  const setLoadAvatars = useUIStore((s) => s.setLoadAvatars);
   const accounts = useAccountStore((s) => s.accounts);
   const removeAccountFromStore = useAccountStore((s) => s.removeAccount);
   const { tab } = useParams({ strict: false }) as { tab?: string };
@@ -574,6 +576,12 @@ export function SettingsPage() {
                         />
                       </SettingRow>
                     )}
+                    <ToggleRow
+                      label="Load avatars and logos"
+                      description="Fetches contact avatars from Gravatar and company logos from public sources (Hunter.io, BIMI DNS). Disabling prevents external requests that reveal which contacts you view."
+                      checked={loadAvatars}
+                      onToggle={() => setLoadAvatars(!loadAvatars)}
+                    />
                   </Section>
 
                   <Section title="Storage">

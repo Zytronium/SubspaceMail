@@ -158,7 +158,7 @@ function ActiveAvatar({ account }: { account: Account | undefined }) {
           key={account.avatarUrl}
           src={account.avatarUrl!}
           alt={account.email}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover bg-white"
           onError={() => setImgError(true)}
         />
       ) : (
@@ -196,7 +196,7 @@ function AccountAvatarSmall({
           key={account.avatarUrl}
           src={account.avatarUrl!}
           alt=""
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover bg-white"
           onError={() => setImgError(true)}
         />
       ) : (

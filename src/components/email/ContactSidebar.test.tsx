@@ -35,6 +35,7 @@ vi.mock("@/services/db/notificationVips", () => ({
 
 vi.mock("@/services/contacts/gravatar", () => ({
   fetchAndCacheGravatarUrl: vi.fn(() => Promise.resolve(null)),
+  fetchAvatarUrl: vi.fn(() => Promise.resolve(null)),
 }));
 
 vi.mock("@/services/db/threads", () => ({

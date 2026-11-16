@@ -10,7 +10,9 @@ import {
   type ContactStats, type DbContact, type ContactAttachment, type SameDomainContact,
 } from "@/services/db/contacts";
 import { isVipSender, addVipSender, removeVipSender } from "@/services/db/notificationVips";
-import { fetchAndCacheGravatarUrl } from "@/services/contacts/gravatar";
+import { fetchAvatarUrl } from "@/services/contacts/gravatar";
+import { useUIStore } from "@/stores/uiStore";
+import { useAvatar } from "@/hooks/useAvatar";
 import { useThreadStore } from "@/stores/threadStore";
 import { useComposerStore } from "@/stores/composerStore";
 import { getThreadById, getThreadLabelIds } from "@/services/db/threads";
@@ -80,7 +82,7 @@ export function ContactSidebar({ email, name, accountId, onClose }: ContactSideb
     loadedRef.current = email;
     let cancelled = false;
 
-    // Load contact + avatar
+    // Load contact + avatar (respect loadAvatars setting)
     getContactByEmail(email).then((c) => {
       if (cancelled) return;
       setContact(c);
@@ -88,9 +90,11 @@ export function ContactSidebar({ email, name, accountId, onClose }: ContactSideb
       if (c?.avatar_url) {
         setAvatarUrl(c.avatar_url);
       } else {
-        fetchAndCacheGravatarUrl(email).then((url) => {
-          if (!cancelled) setAvatarUrl(url);
-        });
+        if (useUIStore.getState().loadAvatars) {
+          fetchAvatarUrl(email).then((url) => {
+            if (!cancelled) setAvatarUrl(url);
+          });
+        }
       }
     });
 
@@ -209,7 +213,7 @@ export function ContactSidebar({ email, name, accountId, onClose }: ContactSideb
             <img
               src={avatarUrl}
               alt={displayName}
-              className="w-16 h-16 rounded-full mb-2"
+              className="w-16 h-16 rounded-full mb-2 bg-white"
             />
           ) : (
             <div className="w-16 h-16 rounded-full bg-accent/20 text-accent flex items-center justify-center text-xl font-semibold mb-2">
@@ -390,24 +394,7 @@ export function ContactSidebar({ email, name, accountId, onClose }: ContactSideb
             </h4>
             <div className="space-y-1">
               {sameDomainContacts.map((c) => (
-                <div
-                  key={c.email}
-                  className="flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-bg-hover transition-colors"
-                >
-                  {c.avatar_url ? (
-                    <img src={c.avatar_url} alt="" className="w-5 h-5 rounded-full shrink-0" />
-                  ) : (
-                    <div className="w-5 h-5 rounded-full bg-accent/20 text-accent flex items-center justify-center text-[0.5rem] font-semibold shrink-0">
-                      {(c.display_name?.[0] ?? c.email[0] ?? "?").toUpperCase()}
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <div className="text-text-secondary truncate">
-                      {c.display_name ?? c.email.split("@")[0]}
-                    </div>
-                    <div className="text-text-tertiary text-[0.625rem] truncate">{c.email}</div>
-                  </div>
-                </div>
+                <SameDomainContactItem key={c.email} contact={c} />
               ))}
             </div>
           </div>
@@ -439,6 +426,29 @@ export function ContactSidebar({ email, name, accountId, onClose }: ContactSideb
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function SameDomainContactItem({ contact }: { contact: SameDomainContact }) {
+  const avatarUrl = useAvatar(contact.email);
+  const initial = (contact.display_name?.[0] ?? contact.email[0] ?? "?").toUpperCase();
+
+  return (
+    <div className="flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-bg-hover transition-colors">
+      {avatarUrl ? (
+        <img src={avatarUrl} alt="" className="w-5 h-5 rounded-full shrink-0 bg-white" />
+      ) : (
+        <div className="w-5 h-5 rounded-full bg-accent/20 text-accent flex items-center justify-center text-[0.5rem] font-semibold shrink-0">
+          {initial}
+        </div>
+      )}
+      <div className="min-w-0">
+        <div className="text-text-secondary truncate">
+          {contact.display_name ?? contact.email.split("@")[0]}
+        </div>
+        <div className="text-text-tertiary text-[0.625rem] truncate">{contact.email}</div>
       </div>
     </div>
   );

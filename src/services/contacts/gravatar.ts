@@ -113,3 +113,26 @@ export async function fetchAndCacheGravatarUrl(email: string): Promise<string | 
   }
   return null;
 }
+
+/**
+ * Unified avatar fetcher — prefers official domain logos over Gravatar.
+ * Returns the best available avatar URL for the given email.
+ * Priority: cached avatar > domain logo > Gravatar
+ */
+export async function fetchAvatarUrl(email: string): Promise<string | null> {
+  // Check if we already have a cached avatar
+  const contact = await getContactByEmail(email);
+  if (contact?.avatar_url) return contact.avatar_url;
+
+  // Try domain logo first (official logos take priority)
+  try {
+    const { fetchAndCacheDomainLogo } = await import("./domainLogo");
+    const logoUrl = await fetchAndCacheDomainLogo(email);
+    if (logoUrl) return logoUrl;
+  } catch {
+    // Domain logo lookup failed — fall through to Gravatar
+  }
+
+  // Fall back to Gravatar
+  return fetchAndCacheGravatarUrl(email);
+}

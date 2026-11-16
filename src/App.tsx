@@ -314,6 +314,12 @@ export default function App() {
           ui.setReduceMotion(true);
         }
 
+        // Restore load avatars preference (default: enabled)
+        const savedLoadAvatars = await getSetting("load_avatars");
+        if (savedLoadAvatars === "false") {
+          ui.setLoadAvatars(false);
+        }
+
         // Restore task sidebar visibility
         const savedTaskSidebar = await getSetting("task_sidebar_visible");
         if (savedTaskSidebar === "true") {

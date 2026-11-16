@@ -4,6 +4,7 @@ import type { Thread } from "@/stores/threadStore";
 import { useThreadStore } from "@/stores/threadStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useActiveLabel } from "@/hooks/useRouteNavigation";
+import { useAvatar } from "@/hooks/useAvatar";
 import { formatRelativeDate } from "@/utils/date";
 import { Paperclip, Star, Check, Pin, BellRing, VolumeX } from "lucide-react";
 import type { DragData } from "@/components/dnd/DndProvider";
@@ -33,6 +34,7 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
   const activeLabel = useActiveLabel();
   const emailDensity = useUIStore((s) => s.emailDensity);
   const isSpam = thread.labelIds.includes("SPAM");
+  const avatarUrl = useAvatar(thread.fromAddress || null);
 
   // Read selectedThreadIds lazily for drag — avoids subscribing all cards to the Set reference
   const dragData: DragData = useMemo(() => ({
@@ -94,13 +96,24 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
       <div className="flex items-start gap-3">
         {/* Avatar */}
         <div
-          className={`rounded-full flex items-center justify-center shrink-0 font-medium text-white ${
+          className={`rounded-full flex items-center justify-center shrink-0 font-medium text-white overflow-hidden ${
             emailDensity === "compact" ? "w-7 h-7 text-xs" : emailDensity === "spacious" ? "w-10 h-10 text-sm" : "w-9 h-9 text-sm"
           } ${
-            isMultiSelected ? "bg-accent" : thread.isRead ? "bg-text-tertiary" : "bg-accent"
+            isMultiSelected ? "bg-accent" : avatarUrl ? "bg-accent" : thread.isRead ? "bg-text-tertiary" : "bg-accent"
           }`}
         >
-          {isMultiSelected ? <Check size={emailDensity === "compact" ? 14 : 16} /> : initial}
+          {isMultiSelected ? (
+            <Check size={emailDensity === "compact" ? 14 : 16} />
+          ) : avatarUrl ? (
+            <img
+              key={avatarUrl}
+              src={avatarUrl}
+              alt=""
+              className="w-full h-full object-cover bg-white"
+            />
+          ) : (
+            initial
+          )}
         </div>
 
         {/* Content */}
