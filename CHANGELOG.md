@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.27](https://github.com/Zytronium/SubspaceMail/compare/velo-v0.4.26...velo-v0.4.27) (2026-11-16)
+
+
+### Features
+
+* trigger release-please workflow ([aba8a93](https://github.com/Zytronium/SubspaceMail/commit/aba8a93c670a2ff1dad4b7aa0fa342ecf7eb1b7f))
+
 ## [0.4.26](https://github.com/Zytronium/SubspaceMail/compare/velo-v0.4.25...velo-v0.4.26) (2026-11-16)
 
 
