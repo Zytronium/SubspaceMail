@@ -5,7 +5,7 @@
 <h1 align="center">Subspace Mail</h1>
 
 <p align="center">
-  <strong>Email at the speed of subspace.</strong>
+  <strong>Email at the speed of subspace — fast, private, and keyboard-first.</strong>
 </p>
 
 <p align="center">
