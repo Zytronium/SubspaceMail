@@ -41,7 +41,7 @@ describe("AccountSwitcher", () => {
           id: "1",
           email: "john@example.com",
           displayName: "John Doe",
-          avatarUrl: "https://broken-url.example.com/avatar.png",
+          avatarUrl: "https://www.gravatar.com/avatar/abc123?d=404&s=80",
           isActive: true,
         },
       ],
