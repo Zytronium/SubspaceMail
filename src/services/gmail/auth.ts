@@ -166,6 +166,9 @@ async function exchangeCodeForTokens(
 
 /**
  * Refresh an expired access token using the refresh token.
+ * Includes the original scopes so the refreshed token retains full permissions
+ * (e.g., both Gmail and Calendar scopes). Without this, Google may return a
+ * token with fewer scopes than the original.
  */
 export async function refreshAccessToken(
   refreshToken: string,
@@ -176,6 +179,7 @@ export async function refreshAccessToken(
     refresh_token: refreshToken,
     client_id: clientId,
     grant_type: "refresh_token",
+    scope: SCOPES,
   };
   if (clientSecret) params.client_secret = clientSecret;
 

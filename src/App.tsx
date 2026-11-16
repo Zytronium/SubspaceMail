@@ -20,7 +20,7 @@ import {
   triggerSync,
   onSyncStatus,
 } from "./services/gmail/syncManager";
-import { initializeClients } from "./services/gmail/tokenManager";
+import { initializeClients, reauthorizeAccount } from "./services/gmail/tokenManager";
 import {
   startSnoozeChecker,
   stopSnoozeChecker,
@@ -109,6 +109,11 @@ export default function App() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [showAskInbox, setShowAskInbox] = useState(false);
+  const [syncScopeErrorAccount, setSyncScopeErrorAccount] = useState<{
+    accountId: string;
+    email: string;
+  } | null>(null);
+  const syncScopeErrorDoneRef = useRef(false);
   const [moveToFolderState, setMoveToFolderState] = useState<{ open: boolean; threadIds: string[] }>({ open: false, threadIds: [] });
   const deepLinkCleanupRef = useRef<(() => void) | undefined>(undefined);
 
@@ -464,11 +469,28 @@ export default function App() {
             .catch((err) => console.error("Backfill error:", err));
         }
       } else if (status === "error") {
-        setSyncStatus(error ? `Sync failed: ${formatSyncError(error)}` : "Sync failed");
-        // Still dispatch sync-done so the UI refreshes with any partially stored data
-        window.dispatchEvent(new Event("subspacemail-sync-done"));
-        // Auto-clear the error after 8 seconds
-        setTimeout(() => setSyncStatus(null), 8_000);
+        // Detect insufficient scopes errors for Gmail accounts and offer re-auth
+        const isScopeError =
+          error && (error.includes("403") || error.includes("insufficient"));
+        if (isScopeError && !syncScopeErrorDoneRef.current) {
+          // Look up the account email from the store
+          const accounts = useAccountStore.getState().accounts;
+          const account = accounts.find((a) => a.id === accountId);
+          if (account && account.provider === "gmail_api") {
+            setSyncScopeErrorAccount({ accountId, email: account.email });
+            setSyncStatus(null);
+          } else {
+            setSyncStatus(error ? `Sync failed: ${formatSyncError(error)}` : "Sync failed");
+            window.dispatchEvent(new Event("subspacemail-sync-done"));
+            setTimeout(() => setSyncStatus(null), 8_000);
+          }
+        } else {
+          setSyncStatus(error ? `Sync failed: ${formatSyncError(error)}` : "Sync failed");
+          // Still dispatch sync-done so the UI refreshes with any partially stored data
+          window.dispatchEvent(new Event("subspacemail-sync-done"));
+          // Auto-clear the error after 8 seconds
+          setTimeout(() => setSyncStatus(null), 8_000);
+        }
       }
     });
     return unsub;
@@ -621,6 +643,46 @@ export default function App() {
           className="fixed bottom-0 left-0 right-0 glass-panel text-white text-xs px-4 py-1.5 text-center z-40 animate-[slideUp_200ms_ease-out,fadeIn_200ms_ease-out] bg-danger/90"
         >
           {syncStatus}
+        </div>
+      )}
+
+      {/* Sync scope error banner — offers re-auth for Gmail accounts with insufficient scopes */}
+      {syncScopeErrorAccount && (
+        <div
+          className="fixed bottom-0 left-0 right-0 glass-panel text-white text-xs px-4 py-2 z-40 animate-[slideUp_200ms_ease-out,fadeIn_200ms_ease-out] bg-warning/90"
+        >
+          <div className="flex items-center justify-center gap-3">
+            <span>
+              Sync failed due to missing permissions for {syncScopeErrorAccount.email}.
+              Re-authorize to grant Calendar and other missing scopes.
+            </span>
+            <button
+              onClick={async () => {
+                try {
+                  await reauthorizeAccount(syncScopeErrorAccount.accountId, syncScopeErrorAccount.email);
+                  syncScopeErrorDoneRef.current = true;
+                  setSyncScopeErrorAccount(null);
+                  syncAccount(syncScopeErrorAccount.accountId);
+                } catch (err) {
+                  console.error("Re-authorization failed:", err);
+                  setSyncScopeErrorAccount(null);
+                  setSyncStatus(`Re-auth failed: ${err instanceof Error ? err.message : String(err)}`);
+                  setTimeout(() => setSyncStatus(null), 8_000);
+                }
+              }}
+              className="px-3 py-1 text-xs font-medium bg-white/20 hover:bg-white/30 rounded-md transition-colors shrink-0"
+            >
+              Re-authorize
+            </button>
+            <button
+              onClick={() => {
+                setSyncScopeErrorAccount(null);
+              }}
+              className="px-2 py-1 text-xs text-white/70 hover:text-white transition-colors shrink-0"
+            >
+              Dismiss
+            </button>
+          </div>
         </div>
       )}
 

@@ -221,7 +221,7 @@ export function CalendarPage() {
       const message = err instanceof Error ? err.message : String(err);
       // Only show the re-authorization banner for Gmail accounts — IMAP/CalDAV accounts
       // cannot use the Google OAuth re-auth flow
-      const isGmailAccount = activeAccount?.provider === "gmail";
+      const isGmailAccount = activeAccount?.provider === "gmail_api";
       if ((message.includes("403") || message.includes("insufficient")) && isGmailAccount) {
         if (reauthDoneRef.current) {
           reauthDoneRef.current = false;
