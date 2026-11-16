@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.4.26](https://github.com/Zytronium/SubspaceMail/compare/velo-v0.4.25...velo-v0.4.26) (2026-11-16)
+
+
+### Features
+
+* use brand logos and Gravatar avatars when possible if setting is on ([9769882](https://github.com/Zytronium/SubspaceMail/commit/9769882c5b52ac5aa0e76598be9d2f4a500e4cbf))
+
+
+### Bug Fixes
+
+* drag-and-drop images insert file path as plaintext instead of uploading the image and embedding it ([defb9e5](https://github.com/Zytronium/SubspaceMail/commit/defb9e51faa072b2d2dd562cf37a677c7636e099))
+* Favicons for the web domain an email address is under are incorrectly used for profile pictures. As a result of this fix, only Gravatar profile pictures are used. ([b0d9f22](https://github.com/Zytronium/SubspaceMail/commit/b0d9f2256b8650b60293273a82f1bc49837e84a9))
+* Flatpak users are prompted to update via self-updater instead of through flatpak ([2574068](https://github.com/Zytronium/SubspaceMail/commit/25740683cbfd9c7c24511f9231001d104e524cb2))
+* Google Calendar and Gmail sync doesn't work when set up properly ([f1561c8](https://github.com/Zytronium/SubspaceMail/commit/f1561c870948bcb062ef4d0c0ef43176c4be9939))
+* No place in UI to add email accounts in combined view ([502d4eb](https://github.com/Zytronium/SubspaceMail/commit/502d4ebbace9ffe79e1d16fd2a3063417b98fb5f))
+
 ## [0.4.25](https://github.com/Zytronium/SubspaceMail/compare/velo-v0.4.24...velo-v0.4.25) (2026-11-15)
 
 
