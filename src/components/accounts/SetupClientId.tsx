@@ -37,7 +37,14 @@ export function SetupClientId({ onComplete, onCancel }: SetupClientIdProps) {
         <ol className="text-text-secondary text-sm mb-4 space-y-1 list-decimal list-inside">
           <li>
             Go to the{" "}
-            <span className="text-accent">Google Cloud Console</span>
+            <a
+              href="https://cloud.google.com/cloud-console"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-accent underline hover:text-accent-hover"
+            >
+              Google Cloud Console
+            </a>
           </li>
           <li>Create a project (or use an existing one)</li>
           <li>Enable the Gmail API</li>

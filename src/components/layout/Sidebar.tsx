@@ -532,10 +532,17 @@ export function Sidebar({ collapsed, onAddAccount }: SidebarProps) {
         {/* Combined mode: account groups with per-account folders */}
         {isCombinedMode && accounts.length > 1 && !collapsed && (
           <div className="pt-4">
-            <div className="px-3 pb-1">
+            <div className="flex items-center justify-between px-3 pb-1">
               <span className="text-xs font-medium text-sidebar-text/60 uppercase tracking-wider">
                 Accounts
               </span>
+              <button
+                onClick={onAddAccount}
+                className="p-0.5 text-sidebar-text/40 hover:text-sidebar-text transition-colors"
+                title="Add account"
+              >
+                <Plus size={14} />
+              </button>
             </div>
             {accounts.map((account) => {
               const isExpanded = expandedAccounts.has(account.id);
