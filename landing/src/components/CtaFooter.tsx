@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { Download } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 export function CtaFooter() {
   return (
@@ -84,9 +85,12 @@ export function CtaFooter() {
             <a href="https://github.com/Zytronium/SubspaceMail/issues" target="_blank" rel="noopener noreferrer" className="hover:text-text-secondary transition-colors no-underline">
               Support
             </a>
-            <a href="https://github.com/Zytronium/SubspaceMail/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" className="hover:text-text-secondary transition-colors no-underline">
-              Apache 2.0
-            </a>
+            <Link to="/privacy" className="hover:text-text-secondary transition-colors no-underline">
+              Privacy
+            </Link>
+            <Link to="/terms" className="hover:text-text-secondary transition-colors no-underline">
+              Terms
+            </Link>
           </div>
         </div>
       </footer>

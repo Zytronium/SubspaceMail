@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { Routes, Route } from 'react-router-dom'
 import Lenis from 'lenis'
 import { Navbar } from './components/Navbar'
 import { Hero } from './components/Hero'
@@ -7,9 +8,11 @@ import { ProductShowcase } from './components/ProductShowcase'
 import { Features } from './components/Features'
 import { OpenSource } from './components/OpenSource'
 import { CtaFooter } from './components/CtaFooter'
+import { Privacy } from './pages/Privacy'
+import { Terms } from './pages/Terms'
 import './App.css'
 
-function App() {
+function HomePage() {
   useEffect(() => {
     const lenis = new Lenis({
       duration: 1.2,
@@ -37,6 +40,16 @@ function App() {
         <CtaFooter />
       </main>
     </div>
+  )
+}
+
+function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<HomePage />} />
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/terms" element={<Terms />} />
+    </Routes>
   )
 }
 
