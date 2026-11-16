@@ -54,6 +54,16 @@ fn is_flatpak() -> bool {
     std::env::var("FLATPAK").is_ok()
 }
 
+/// Read a file by absolute path and return the content as a base64 string.
+/// Used for drag-and-drop from file managers (e.g., Dolphin) that provide
+/// file:// URIs instead of File objects.
+#[tauri::command]
+fn read_file_as_base64(path: String) -> Result<String, String> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let bytes = std::fs::read(&path).map_err(|e| format!("Failed to read '{}': {}", path, e))?;
+    Ok(STANDARD.encode(&bytes))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Set explicit AUMID on Windows so toast notifications show "Subspace Mail"
@@ -101,6 +111,7 @@ pub fn run() {
             close_splashscreen,
             open_devtools,
             is_flatpak,
+            read_file_as_base64,
             commands::imap_test_connection,
             commands::imap_list_folders,
             commands::imap_fetch_messages,

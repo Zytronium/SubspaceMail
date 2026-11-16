@@ -58,6 +58,11 @@ export function Composer() {
   const setViewMode = useComposerStore((s) => s.setViewMode);
   const addAttachment = useComposerStore((s) => s.addAttachment);
 
+  // Ref so the handleDOMEvents.drop handler can access addAttachment without
+  // being in the useEffect dependency array or recreating the editor.
+  const addAttachmentRef = useRef(addAttachment);
+  addAttachmentRef.current = addAttachment;
+
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
   const accounts = useAccountStore((s) => s.accounts);
   const activeAccount = accounts.find((a) => a.id === activeAccountId);
@@ -128,14 +133,162 @@ export function Composer() {
         class:
           "prose prose-sm max-w-none px-4 py-3 min-h-[200px] focus:outline-none text-text-primary",
       },
-      handleDrop: (_view, event) => {
-        // Prevent TipTap from handling file drops as inline content.
-        // Returning true stops TipTap's Image extension from intercepting the drop,
-        // allowing the event to bubble up to the composer's onDrop for attachment handling.
-        if (event.dataTransfer?.files?.length) {
-          return true;
-        }
-        return false;
+      handleDOMEvents: {
+        drop: (_view, event) => {
+          const view = _view;
+          const e = event as DragEvent;
+          const dt = e.dataTransfer;
+          if (!dt) return false;
+
+          const isImageExtension = (filename: string) => {
+            const ext = filename.split(".").pop()?.toLowerCase();
+            return ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico", "tiff", "tif"].includes(ext || "");
+          };
+
+          const embedImage = (filePath: string) => {
+            const fileName = filePath.split("/").pop() || "unknown";
+            import("@tauri-apps/api/core").then(({ invoke }) => {
+              return invoke<string>("read_file_as_base64", { path: filePath });
+            }).then((base64) => {
+              if (isImageExtension(fileName)) {
+                const ext = fileName.split(".").pop()?.toLowerCase() || "";
+                const mimeMap: Record<string, string> = {
+                  jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
+                  gif: "image/gif", webp: "image/webp", svg: "image/svg+xml",
+                  bmp: "image/bmp", ico: "image/x-icon", tiff: "image/tiff", tif: "image/tiff",
+                };
+                const mimeType = mimeMap[ext] || "image/jpeg";
+                const dataUrl = `data:${mimeType};base64,${base64}`;
+                const { schema } = view.state;
+                const node = schema.nodes.image?.create({
+                  src: dataUrl,
+                  alt: fileName,
+                  title: fileName,
+                });
+                if (node) {
+                  const tr = view.state.tr.replaceSelectionWith(node).scrollIntoView();
+                  view.dispatch(tr);
+                }
+              } else {
+                const ext = fileName.split(".").pop()?.toLowerCase() || "";
+                const mimeMap: Record<string, string> = {
+                  pdf: "application/pdf",
+                  doc: "application/msword",
+                  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                  xls: "application/vnd.ms-excel",
+                  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                  txt: "text/plain",
+                  zip: "application/zip",
+                  gz: "application/gzip",
+                  rar: "application/x-rar-compressed",
+                  mp3: "audio/mpeg",
+                  mp4: "video/mp4",
+                };
+                const mimeType = mimeMap[ext] || "application/octet-stream";
+                const size = Math.round(base64.length * 0.75);
+                addAttachmentRef.current({
+                  id: crypto.randomUUID(),
+                  file: new File([""], fileName, { type: mimeType }),
+                  filename: fileName,
+                  mimeType,
+                  size,
+                  content: base64,
+                });
+              }
+            }).catch((err) => {
+              console.warn("Failed to load dropped file:", err);
+            });
+          };
+
+          // 1. Standard File API (most browsers and file managers)
+          const files = dt.files;
+          if (files && files.length > 0) {
+            e.preventDefault();
+            const fileArray = Array.from<File>(files);
+            const imageFiles = fileArray.filter((f) => f.type.startsWith("image/"));
+            const nonImageFiles = fileArray.filter((f) => !f.type.startsWith("image/"));
+
+            for (const file of imageFiles) {
+              const reader = new FileReader();
+              reader.onload = () => {
+                const dataUrl = reader.result as string;
+                const { schema } = view.state;
+                const node = schema.nodes.image?.create({
+                  src: dataUrl,
+                  alt: file.name,
+                  title: file.name,
+                });
+                if (node) {
+                  const tr = view.state.tr.replaceSelectionWith(node).scrollIntoView();
+                  view.dispatch(tr);
+                }
+              };
+              reader.readAsDataURL(file);
+            }
+
+            for (const file of nonImageFiles) {
+              readFileAsBase64(file).then((content) => {
+                addAttachmentRef.current({
+                  id: crypto.randomUUID(),
+                  file,
+                  filename: file.name,
+                  mimeType: file.type || "application/octet-stream",
+                  size: file.size,
+                  content,
+                });
+              });
+            }
+            return true;
+          }
+
+          // 2. text/uri-list (Dolphin, Nautilus, KDE, GNOME file managers)
+          if (dt.types.includes("text/uri-list")) {
+            const uriList = dt.getData("text/uri-list");
+            if (uriList) {
+              e.preventDefault();
+              const uris = uriList
+                .split("\n")
+                .map((uri) => uri.trim())
+                .filter((uri) => uri.startsWith("file://"))
+                .map((uri) => decodeURIComponent(uri.replace("file://", "")));
+              for (const filePath of uris) {
+                embedImage(filePath);
+              }
+              return true;
+            }
+          }
+
+          // 2b. text/html (Dolphin and other file managers may store URIs in HTML format)
+          if (dt.types.includes("text/html")) {
+            const html = dt.getData("text/html");
+            if (html) {
+              const fileUris = html.match(/file:\/\/[^"'\s<>]+/g);
+              if (fileUris && fileUris.length > 0) {
+                e.preventDefault();
+                for (const uri of fileUris) {
+                  const filePath = decodeURIComponent(uri.replace("file://", ""));
+                  embedImage(filePath);
+                }
+                return true;
+              }
+            }
+          }
+
+          // 3. text/plain fallback (raw file paths from some file managers)
+          if (dt.types.includes("text/plain")) {
+            const text = dt.getData("text/plain").trim();
+            if (text.startsWith("/") || text.startsWith("file://")) {
+              e.preventDefault();
+              const filePath = text.startsWith("file://")
+                ? decodeURIComponent(text.replace("file://", ""))
+                : text;
+              embedImage(filePath);
+              return true;
+            }
+          }
+
+          return false;
+        },
       },
     },
   });
