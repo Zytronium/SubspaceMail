@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useUIStore } from "@/stores/uiStore";
-import { getContactByEmail } from "@/services/db/contacts";
-import { fetchAvatarUrl } from "@/services/contacts/gravatar";
+import { getContactByEmail, updateContactAvatar } from "@/services/db/contacts";
+import { fetchAvatarUrl, isValidAvatarUrl } from "@/services/contacts/gravatar";
 
 /**
  * Module-level cache to avoid redundant fetches across components.
@@ -12,7 +12,8 @@ const avatarCache = new Map<string, string | null>();
 /**
  * Hook that returns the avatar URL for a given email address.
  * Respects the loadAvatars setting — returns null immediately when disabled.
- * Checks cached contact data first, then fetches (domain logo > Gravatar).
+ * Priority: cached avatar > Gravatar.
+ * All domain logo sources removed to prevent favicons.
  */
 export function useAvatar(email: string | null): string | null {
   const loadAvatars = useUIStore((s) => s.loadAvatars);
@@ -27,22 +28,31 @@ export function useAvatar(email: string | null): string | null {
     let cancelled = false;
 
     const load = async () => {
-      // Check module cache first
+      // Check module cache first (skip invalid cached URLs)
       const cached = avatarCache.get(email.toLowerCase());
-      if (cached !== undefined) {
+      if (cached && isValidAvatarUrl(cached)) {
         if (!cancelled) setAvatarUrl(cached);
         return;
+      }
+      // Clear invalid module cache entries (favicon URLs, etc.)
+      if (cached !== undefined) {
+        avatarCache.delete(email.toLowerCase());
       }
 
       // Check DB contact
       const contact = await getContactByEmail(email);
       if (contact?.avatar_url) {
-        avatarCache.set(email.toLowerCase(), contact.avatar_url);
-        if (!cancelled) setAvatarUrl(contact.avatar_url);
-        return;
+        // Skip cached invalid URLs (favicons, etc.) — they are no longer a valid source
+        if (!isValidAvatarUrl(contact.avatar_url)) {
+          await updateContactAvatar(email, null);
+        } else {
+          avatarCache.set(email.toLowerCase(), contact.avatar_url);
+          if (!cancelled) setAvatarUrl(contact.avatar_url);
+          return;
+        }
       }
 
-      // Fetch avatar (domain logo > Gravatar)
+      // Fetch avatar (Gravatar only)
       const url = await fetchAvatarUrl(email);
       avatarCache.set(email.toLowerCase(), url);
       if (!cancelled) setAvatarUrl(url);

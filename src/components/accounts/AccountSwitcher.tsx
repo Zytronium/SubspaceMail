@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from "react";
 import { useAccountStore, type Account } from "@/stores/accountStore";
 import { ChevronDown, Check, Plus, UserPlus, Calendar } from "lucide-react";
 import { useClickOutside } from "@/hooks/useClickOutside";
+import { isValidAvatarUrl } from "@/services/contacts/gravatar";
 
 interface AccountSwitcherProps {
   collapsed: boolean;
@@ -149,7 +150,7 @@ function ActiveAvatar({ account }: { account: Account | undefined }) {
   const initial = (
     account.displayName?.[0] ?? account.email[0] ?? "?"
   ).toUpperCase();
-  const showImg = account.avatarUrl && !imgError;
+  const showImg = account.avatarUrl && !imgError && isValidAvatarUrl(account.avatarUrl);
 
   return (
     <div className="w-8 h-8 rounded-full bg-accent/15 text-accent flex items-center justify-center shrink-0 text-sm font-semibold overflow-hidden">
@@ -181,7 +182,7 @@ function AccountAvatarSmall({
   const initial = (
     account.displayName?.[0] ?? account.email[0] ?? "?"
   ).toUpperCase();
-  const showImg = account.avatarUrl && !imgError;
+  const showImg = account.avatarUrl && !imgError && isValidAvatarUrl(account.avatarUrl);
 
   return (
     <div

@@ -7,7 +7,6 @@ import { normalizeEmail } from "@/utils/emailUtils";
  * Priority:
  * 1. BIMI DNS record — industry standard; companies publish their logo URL in DNS
  * 2. Hunter.io Logo API — free, no API key, returns actual company logos (PNG/WEBP/AVIF)
- * 3. Google Favicon API — fallback for domains not in Hunter's database
  */
 
 /**
@@ -89,14 +88,6 @@ function getHunterLogoUrl(domain: string): string {
 }
 
 /**
- * Build a Google Favicon API URL for a domain (fallback).
- * Returns browser favicons, not actual company logos — used only as last resort.
- */
-function getGoogleLogoUrl(domain: string): string {
-  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`;
-}
-
-/**
  * Check if a logo URL actually returns an image (not a 404).
  */
 async function logoExists(url: string): Promise<boolean> {
@@ -109,9 +100,43 @@ async function logoExists(url: string): Promise<boolean> {
 }
 
 /**
+ * Fetch only the BIMI DNS logo for a domain (without caching or Hunter fallback).
+ * Used by the avatar priority chain: Cached > BIMI > Gravatar > Hunter.io.
+ */
+export async function fetchBimiLogoOnly(email: string): Promise<string | null> {
+  const domain = extractDomain(email);
+  if (!domain) return null;
+  if (PUBLIC_DOMAINS.has(domain)) return null;
+
+  const bimiUrl = await fetchBimiLogo(domain);
+  if (bimiUrl) {
+    await updateContactAvatar(email, bimiUrl);
+    return bimiUrl;
+  }
+  return null;
+}
+
+/**
+ * Fetch only the Hunter.io logo for a domain (without BIMI check).
+ * Used as the lowest-priority fallback in the avatar chain.
+ */
+export async function fetchHunterLogoOnly(email: string): Promise<string | null> {
+  const domain = extractDomain(email);
+  if (!domain) return null;
+  if (PUBLIC_DOMAINS.has(domain)) return null;
+
+  const hunterUrl = getHunterLogoUrl(domain);
+  if (await logoExists(hunterUrl)) {
+    await updateContactAvatar(email, hunterUrl);
+    return hunterUrl;
+  }
+  return null;
+}
+
+/**
  * Fetch and cache a domain logo for the given email address.
  * Returns the logo URL if found, null otherwise.
- * Priority: BIMI DNS record > Hunter.io > Google Favicons.
+ * Priority: BIMI DNS record > Hunter.io.
  */
 export async function fetchAndCacheDomainLogo(email: string): Promise<string | null> {
   const domain = extractDomain(email);
@@ -124,7 +149,7 @@ export async function fetchAndCacheDomainLogo(email: string): Promise<string | n
   const contact = await getContactByEmail(email);
   if (contact?.avatar_url) {
     const url = contact.avatar_url;
-    if (url.includes("logos.hunter.io") || url.includes("google.com/s2/favicons") || url.includes(".svg")) {
+    if (url.includes("logos.hunter.io") || url.includes(".svg")) {
       return url;
     }
   }
@@ -141,13 +166,6 @@ export async function fetchAndCacheDomainLogo(email: string): Promise<string | n
   if (await logoExists(hunterUrl)) {
     await updateContactAvatar(email, hunterUrl);
     return hunterUrl;
-  }
-
-  // 3. Fall back to Google Favicons for domains not in Hunter's database
-  const googleUrl = getGoogleLogoUrl(domain);
-  if (await logoExists(googleUrl)) {
-    await updateContactAvatar(email, googleUrl);
-    return googleUrl;
   }
 
   return null;

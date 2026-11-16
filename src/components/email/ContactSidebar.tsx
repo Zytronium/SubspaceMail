@@ -10,7 +10,7 @@ import {
   type ContactStats, type DbContact, type ContactAttachment, type SameDomainContact,
 } from "@/services/db/contacts";
 import { isVipSender, addVipSender, removeVipSender } from "@/services/db/notificationVips";
-import { fetchAvatarUrl } from "@/services/contacts/gravatar";
+import { fetchAvatarUrl, isValidAvatarUrl } from "@/services/contacts/gravatar";
 import { useUIStore } from "@/stores/uiStore";
 import { useAvatar } from "@/hooks/useAvatar";
 import { useThreadStore } from "@/stores/threadStore";
@@ -87,7 +87,7 @@ export function ContactSidebar({ email, name, accountId, onClose }: ContactSideb
       if (cancelled) return;
       setContact(c);
       setNotes(c?.notes ?? "");
-      if (c?.avatar_url) {
+      if (c?.avatar_url && isValidAvatarUrl(c.avatar_url)) {
         setAvatarUrl(c.avatar_url);
       } else {
         if (useUIStore.getState().loadAvatars) {

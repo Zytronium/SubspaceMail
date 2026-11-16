@@ -96,10 +96,32 @@ export function getGravatarUrl(email: string): string {
   return `https://www.gravatar.com/avatar/${hash}?d=404&s=80`;
 }
 
+/**
+ * Check if a cached avatar URL is from a valid source.
+ * Accepts only Gravatar and Google OAuth profile pictures.
+ * All other sources (favicons, domain logos, Hunter.io) are rejected.
+ */
+export function isValidAvatarUrl(url: string): boolean {
+  // Gravatar is the only valid avatar source
+  if (url.includes("gravatar.com")) return true;
+  // Google profile pictures from OAuth — valid (but not favicon endpoints)
+  if (url.includes(".googleusercontent.com/") && !url.includes("/favicon")) return true;
+  // Everything else is rejected — no favicons, no domain logos, no Hunter.io
+  return false;
+}
+
 export async function fetchAndCacheGravatarUrl(email: string): Promise<string | null> {
   // Check if we already have a cached avatar
   const contact = await getContactByEmail(email);
-  if (contact?.avatar_url) return contact.avatar_url;
+  if (contact?.avatar_url) {
+    // Skip cached invalid URLs — they are no longer a valid source
+    if (!isValidAvatarUrl(contact.avatar_url)) {
+      await updateContactAvatar(email, null);
+    }
+    else {
+      return contact.avatar_url;
+    }
+  }
 
   const url = getGravatarUrl(email);
   try {
@@ -115,24 +137,24 @@ export async function fetchAndCacheGravatarUrl(email: string): Promise<string | 
 }
 
 /**
- * Unified avatar fetcher — prefers official domain logos over Gravatar.
+ * Unified avatar fetcher.
  * Returns the best available avatar URL for the given email.
- * Priority: cached avatar > domain logo > Gravatar
+ * Priority: cached avatar > Gravatar > null
+ * All domain logo sources (BIMI DNS, Hunter.io) are excluded to prevent favicons.
  */
 export async function fetchAvatarUrl(email: string): Promise<string | null> {
-  // Check if we already have a cached avatar
+  // 1. Check if we already have a cached avatar
   const contact = await getContactByEmail(email);
-  if (contact?.avatar_url) return contact.avatar_url;
-
-  // Try domain logo first (official logos take priority)
-  try {
-    const { fetchAndCacheDomainLogo } = await import("./domainLogo");
-    const logoUrl = await fetchAndCacheDomainLogo(email);
-    if (logoUrl) return logoUrl;
-  } catch {
-    // Domain logo lookup failed — fall through to Gravatar
+  if (contact?.avatar_url) {
+    // Skip cached invalid URLs — they are no longer a valid source
+    if (!isValidAvatarUrl(contact.avatar_url)) {
+      await updateContactAvatar(email, null);
+    }
+    else {
+      return contact.avatar_url;
+    }
   }
 
-  // Fall back to Gravatar
-  return fetchAndCacheGravatarUrl(email);
+  // 2. Try Gravatar
+  return await fetchAndCacheGravatarUrl(email);
 }

@@ -775,6 +775,65 @@ const MIGRATIONS = [
     description: "Accept self-signed certificates for IMAP/SMTP",
     sql: `ALTER TABLE accounts ADD COLUMN accept_invalid_certs INTEGER DEFAULT 0;`,
   },
+  {
+    version: 24,
+    description: "Clear cached favicon URLs from contacts",
+    sql: `
+      UPDATE contacts SET avatar_url = NULL
+      WHERE avatar_url LIKE '%google.com/s2/favicons%';
+      UPDATE contacts SET avatar_url = NULL
+      WHERE avatar_url LIKE '%duckduckgo.com/favicons%';
+      UPDATE contacts SET avatar_url = NULL
+      WHERE avatar_url LIKE '%icons.duckduckgo.com%';
+      UPDATE contacts SET avatar_url = NULL
+      WHERE avatar_url LIKE '%favicon.ico%';
+    `,
+  },
+  {
+    version: 25,
+    description: "Clear all cached contact avatars to force re-fetch from valid sources only",
+    sql: `
+      UPDATE contacts SET avatar_url = NULL;
+    `,
+  },
+  {
+    version: 26,
+    description: "Clear all cached account avatars to remove any favicon URLs",
+    sql: `
+      UPDATE accounts SET avatar_url = NULL;
+    `,
+  },
+  {
+    version: 27,
+    description: "Clear all cached contact avatars again — isValidAvatarUrl now uses whitelist-only validation",
+    sql: `
+      UPDATE contacts SET avatar_url = NULL;
+    `,
+  },
+  {
+    version: 28,
+    description: "Remove all domain logos (BIMI/Hunter.io) and clear all avatars — only Gravatar allowed",
+    sql: `
+      UPDATE contacts SET avatar_url = NULL;
+      UPDATE accounts SET avatar_url = NULL;
+    `,
+  },
+  {
+    version: 29,
+    description: "Restore Hunter.io company logos and clear all avatars for fresh fetch",
+    sql: `
+      UPDATE contacts SET avatar_url = NULL;
+      UPDATE accounts SET avatar_url = NULL;
+    `,
+  },
+  {
+    version: 30,
+    description: "Remove Hunter.io and clear all avatars — only Gravatar allowed",
+    sql: `
+      UPDATE contacts SET avatar_url = NULL;
+      UPDATE accounts SET avatar_url = NULL;
+    `,
+  },
 ];
 
 /**

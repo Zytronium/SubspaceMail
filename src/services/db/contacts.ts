@@ -151,7 +151,7 @@ export async function getRecentThreadsWithContact(
 
 export async function updateContactAvatar(
   email: string,
-  avatarUrl: string,
+  avatarUrl: string | null,
 ): Promise<void> {
   const db = await getDb();
   await db.execute(
