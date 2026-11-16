@@ -16,6 +16,7 @@ import {
   EXTRACT_TASK_PROMPT,
 } from "./prompts";
 
+/** Call the active AI provider with a system prompt and user content. */
 async function callAi(systemPrompt: string, userContent: string): Promise<string> {
   try {
     const provider = await getActiveProvider();
